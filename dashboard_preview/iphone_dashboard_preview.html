@@ -1,0 +1,886 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ASME Pit" />
+  <title>ASME e-HPVC Pitwall Telemetry — iPhone UI Prototype</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root {
+      --background: #0b1118;
+      --card: #121b26;
+      --sidebar: #162130;
+      --border: #243447;
+      --foreground: #f1f5f9;
+      --muted-foreground: #94a3b8;
+      --secondary: #1e2d3d;
+      --secondary-foreground: #e2e8f0;
+    }
+    body {
+      background-color: var(--background);
+      color: var(--foreground);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    }
+  </style>
+</head>
+<body class="bg-[var(--background)] text-[var(--foreground)] antialiased p-4 flex flex-col items-center justify-center min-h-screen">
+
+  <!-- Simulator Toolbar Above Phone -->
+  <div class="w-full max-w-[390px] mb-3 flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-[var(--card)] border border-[var(--border)] rounded-xl shadow-sm">
+    <div class="flex items-center gap-1.5">
+      <button id="safariBarBtn" onclick="toggleSafariBar()" class="px-2.5 py-1 rounded-lg text-xs font-semibold border border-[var(--border)] bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90 transition">
+        Mode: Fullscreen PWA
+      </button>
+      <button id="simSpeedBtn" onclick="toggleSimSpeed()" class="px-2.5 py-1 rounded-lg text-xs font-semibold border border-[var(--border)] bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90 transition">
+        Speed: 1x
+      </button>
+    </div>
+    <button onclick="injectGpsDrift()" class="px-2.5 py-1 rounded-lg text-xs font-semibold border border-[var(--border)] bg-[var(--secondary)] text-[var(--secondary-foreground)] hover:opacity-90 transition">
+      +8ft Drift
+    </button>
+  </div>
+
+  <!-- LOCKED 19.5:9 VERTICAL IPHONE 15/16 PRO FRAME (380px x 780px) -->
+  <div style="width: 380px; height: 780px;" class="bg-[var(--card)] border-[5px] border-[var(--border)] rounded-[46px] shadow-2xl overflow-hidden flex flex-col shrink-0 select-none">
+
+    <!-- 1. iOS Status Bar + Dynamic Island (Fixed Top) -->
+    <div class="px-6 pt-2.5 pb-1.5 bg-[var(--sidebar)] flex items-center justify-between text-xs font-semibold shrink-0">
+      <span>9:41</span>
+      <div class="px-3 py-0.5 rounded-full bg-[var(--background)] border border-[var(--border)] flex items-center gap-1.5 text-xs">
+        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+        <span>LoRa 10Hz</span>
+        <span class="text-[var(--muted-foreground)]">•</span>
+        <span id="topRssi" class="text-emerald-500 font-mono">-62dBm</span>
+      </div>
+      <span id="topLossBadge" class="px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-mono text-xs">0.3%</span>
+    </div>
+
+    <!-- 2. Persistent Race Header (Always Visible Across All Tabs) -->
+    <div class="px-4 py-2.5 bg-[var(--sidebar)] border-b border-[var(--border)] flex items-center justify-between shrink-0">
+      <!-- Master Race Timer -->
+      <div>
+        <div class="flex items-center gap-1.5">
+          <span id="raceTimerDisplay" class="text-xl font-black font-mono tracking-tight text-[var(--foreground)]">00:14:22</span>
+          <button id="timerToggleBtn" onclick="toggleRaceTimer()" class="px-2 py-0.5 rounded text-xs font-bold bg-emerald-500/15 text-emerald-500 border border-emerald-500/30">
+            PAUSE
+          </button>
+        </div>
+        <div class="text-xs text-[var(--muted-foreground)] font-mono">
+          Lap <strong id="headerLapNum" class="text-[var(--foreground)]">6</strong> • Split <span id="headerLapSplit" class="text-[var(--foreground)]">00:48.4</span>
+        </div>
+      </div>
+
+      <!-- Active Driver & Next Driver Pill -->
+      <div onclick="switchTab('laps')" class="text-right cursor-pointer group">
+        <div class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[var(--secondary)] border border-[var(--border)] text-xs font-bold group-hover:opacity-80">
+          <span>🏎️</span>
+          <span id="headerActiveDriver">Srinivas</span>
+        </div>
+        <div class="text-xs text-[var(--muted-foreground)] mt-0.5">
+          Next: <strong id="headerNextDriver" class="text-[var(--foreground)]">Justin</strong> ›
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. TAB CONTENT VIEWPORT (Automatically adapts via Flex / 100dvh when Safari Bar is shown) -->
+    <div class="flex-1 overflow-y-auto p-3.5 flex flex-col justify-between min-h-0">
+
+      <!-- ========================================================= -->
+      <!-- TAB 1: RACE & SATELLITE TRACK MAP (Default Primary View)  -->
+      <!-- ========================================================= -->
+      <div id="tab-race" class="flex-1 flex flex-col justify-between space-y-2.5 min-h-0">
+
+        <!-- Hero Wheel Speed Card (Compact) -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl px-3.5 py-2 flex items-center justify-between shrink-0">
+          <div>
+            <div class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Avg Speed (1s)</div>
+            <div class="flex items-baseline gap-1.5">
+              <span id="speedMphDisplay" class="text-3xl font-black font-mono tracking-tight text-[var(--foreground)]">18.6</span>
+              <span class="text-xs font-bold text-[var(--muted-foreground)]">MPH</span>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-right font-mono text-xs">
+            <div class="text-[var(--muted-foreground)]">FT/S: <strong id="speedFtsDisplay" class="text-[var(--foreground)]">27.3</strong></div>
+            <div class="text-[var(--muted-foreground)]">RPM: <strong id="wheelRpmDisplay" class="text-[var(--foreground)]">312</strong></div>
+            <div class="text-[var(--muted-foreground)]">DIST: <strong id="totalDistDisplay" class="text-[var(--foreground)]">1.42mi</strong></div>
+            <div class="text-[var(--muted-foreground)]">LAP: <strong id="lapDistDisplay" class="text-[var(--foreground)]">940ft</strong></div>
+          </div>
+        </div>
+
+        <!-- 10-Turn Satellite Track Map + Sensor Fusion Trace -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl overflow-hidden flex-1 flex flex-col justify-between min-h-0">
+          <div class="px-3 py-1.5 border-b border-[var(--border)] flex items-center justify-between shrink-0">
+            <div>
+              <div class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">0.25 mi Track • 10 Turns</div>
+              <div class="text-xs text-[var(--muted-foreground)]">
+                Accuracy: <strong id="fusionErrorDisplay" class="text-emerald-500 font-mono">±3.4 ft</strong> • <span id="pinStatusText">Pin Locked</span>
+              </div>
+            </div>
+            <div class="flex items-center gap-1">
+              <button id="dropPinBtn" onclick="toggleDropPinMode()" class="px-2 py-1 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+                📍 Drop Pin
+              </button>
+              <button onclick="snapPinToTrike()" title="Set Start Line to Trike's Current GPS" class="px-2 py-1 rounded-lg text-xs font-semibold bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)]">
+                Here
+              </button>
+            </div>
+          </div>
+
+          <!-- Canvas Map Container -->
+          <div class="relative flex-1 flex items-center justify-center bg-[#16241c] min-h-0">
+            <canvas id="trackCanvas" width="345" height="230" class="w-full h-full block cursor-crosshair"></canvas>
+
+            <!-- Loop-Closure Notification Pill -->
+            <div id="loopClosureToast" class="hidden absolute top-2 left-2 right-2 px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-xs font-semibold shadow-md flex items-center justify-between">
+              <span>✓ Snapped to Start Pin (0,0)</span>
+              <span id="toastDriftCleared" class="font-mono">±1.8 ft</span>
+            </div>
+
+            <!-- Last Event Pill Overlay (Bottom Left of Map) -->
+            <div id="lastEventOverlay" class="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-black/65 text-white text-xs font-mono">
+              Last: LAP 5 (01:12.8)
+            </div>
+          </div>
+
+          <!-- Map Layer Toggle Bar -->
+          <div class="px-3 py-1.5 bg-[var(--card)] border-t border-[var(--border)] flex items-center justify-between text-xs shrink-0">
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="showFusedToggle" checked onchange="drawTrack()" class="rounded" />
+              <span class="font-medium">Fused Trace (Speed)</span>
+            </label>
+            <label class="flex items-center gap-1.5 cursor-pointer">
+              <input type="checkbox" id="showRawGpsToggle" checked onchange="drawTrack()" class="rounded" />
+              <span class="text-[var(--muted-foreground)]">Raw 1Hz GPS</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Giant Thumb-Zone Action Buttons (Bottom of Tab 1) -->
+        <div class="grid grid-cols-12 gap-2 shrink-0">
+          <button onclick="recordLap()" class="col-span-6 py-2.5 px-2 rounded-2xl bg-emerald-600 hover:bg-emerald-500 active:scale-[0.98] text-white font-black text-sm shadow-sm transition flex flex-col items-center justify-center">
+            <span>🏁 LAP</span>
+            <span class="text-xs font-normal opacity-90">Snap to Start Pin</span>
+          </button>
+          <button onclick="recordPitStop()" class="col-span-3 py-2.5 px-1 rounded-2xl bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-500 font-bold text-xs transition flex flex-col items-center justify-center">
+            <span class="text-sm">🔧</span>
+            <span>PIT STOP</span>
+          </button>
+          <button onclick="recordDelivery()" class="col-span-3 py-2.5 px-1 rounded-2xl bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 text-sky-500 font-bold text-xs transition flex flex-col items-center justify-center">
+            <span class="text-sm">📦</span>
+            <span>DELIVERY</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 2: LAPS, PIT STOPS & NEXT DRIVER QUEUE                -->
+      <!-- ========================================================= -->
+      <div id="tab-laps" class="hidden flex-1 flex flex-col justify-between space-y-2.5 min-h-0">
+
+        <!-- Next Pitstop Driver Queue Card -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-2 shrink-0">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">Driver Change Queue</span>
+            <span class="text-xs text-[var(--muted-foreground)]">Swaps on Pit Stop</span>
+          </div>
+
+          <!-- Quick Roster Chips -->
+          <div class="flex flex-wrap gap-1.5">
+            <button onclick="selectQuickDriver('Srinivas')" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs font-semibold hover:border-emerald-500">Srinivas</button>
+            <button onclick="selectQuickDriver('Justin')" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs font-semibold hover:border-emerald-500">Justin</button>
+            <button onclick="selectQuickDriver('Alex')" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs font-semibold hover:border-emerald-500">Alex</button>
+            <button onclick="selectQuickDriver('Maya')" class="px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] text-xs font-semibold hover:border-emerald-500">Maya</button>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <input id="nextDriverInput" type="text" value="Justin" placeholder="Custom driver name..." class="flex-1 min-w-0 px-3 py-1.5 rounded-xl bg-[var(--card)] border border-[var(--border)] text-xs font-semibold text-[var(--foreground)]" />
+            <button onclick="queueNextDriver()" class="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold">
+              Set Next
+            </button>
+          </div>
+        </div>
+
+        <!-- Lap Summary Stats Row -->
+        <div class="grid grid-cols-3 gap-2 shrink-0 text-center">
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2">
+            <div class="text-xs text-[var(--muted-foreground)]">Completed</div>
+            <div id="statTotalLaps" class="text-base font-black font-mono">5 Laps</div>
+          </div>
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2">
+            <div class="text-xs text-[var(--muted-foreground)]">Best Lap</div>
+            <div class="text-base font-black font-mono text-emerald-500">01:12.8</div>
+          </div>
+          <div class="bg-[var(--background)] border border-[var(--border)] rounded-xl p-2">
+            <div class="text-xs text-[var(--muted-foreground)]">Pit / Deliv</div>
+            <div id="statMarkersCount" class="text-base font-black font-mono">1 / 1</div>
+          </div>
+        </div>
+
+        <!-- Scrollable Event History Log -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 flex-1 flex flex-col min-h-0">
+          <div class="flex items-center justify-between mb-2 shrink-0">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--muted-foreground)]">Race Event Log</span>
+            <button onclick="resetRaceTimer()" class="text-xs text-red-400 font-semibold">Reset Timer</button>
+          </div>
+          <div class="overflow-y-auto flex-1">
+            <table class="w-full text-left border-collapse text-xs">
+              <thead>
+                <tr class="border-b border-[var(--border)] text-[var(--muted-foreground)]">
+                  <th class="py-1 font-semibold">Event</th>
+                  <th class="py-1 font-semibold">Driver</th>
+                  <th class="py-1 font-semibold">Split / Detail</th>
+                  <th class="py-1 font-semibold text-right">Time</th>
+                </tr>
+              </thead>
+              <tbody id="eventLogTableBody" class="font-mono divide-y divide-[var(--border)]">
+                <!-- Populated by JS -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 3: SENSORS (IMU ATTITUDE, POWER/INA238, CALIBRATION)  -->
+      <!-- ========================================================= -->
+      <div id="tab-sensors" class="hidden flex-1 flex flex-col justify-between space-y-2.5 min-h-0">
+
+        <!-- IMU Attitude & G-Force Card -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">Trike IMU (Phone BLE / I²C)</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-mono text-xs">Fused 10Hz</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 font-mono text-xs">
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Roll (Corner Lean)</div>
+              <div id="imuRollDisplay" class="text-base font-black text-[var(--foreground)] mt-0.5">+4.2°</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Pitch (Track Slope)</div>
+              <div id="imuPitchDisplay" class="text-base font-black text-[var(--foreground)] mt-0.5">+1.1°</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Compass Heading</div>
+              <div id="imuYawDisplay" class="text-base font-black text-[var(--foreground)] mt-0.5">142° SE</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Cornering G-Force</div>
+              <div id="imuGDisplay" class="text-base font-black text-emerald-500 mt-0.5">0.38 G</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INA238 Power & Battery Card -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">INA238 Battery Telemetry</span>
+            <span class="text-xs font-mono font-bold text-emerald-500">84% SoC</span>
+          </div>
+          <div class="w-full h-2 rounded-full bg-[var(--card)] border border-[var(--border)] overflow-hidden">
+            <div class="h-full bg-emerald-500" style="width: 84%"></div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 font-mono text-xs">
+            <div class="flex justify-between p-2 rounded-lg bg-[var(--card)]">
+              <span class="text-[var(--muted-foreground)]">Voltage:</span>
+              <strong>49.8 V</strong>
+            </div>
+            <div class="flex justify-between p-2 rounded-lg bg-[var(--card)]">
+              <span class="text-[var(--muted-foreground)]">Current:</span>
+              <strong>11.4 A</strong>
+            </div>
+            <div class="flex justify-between p-2 rounded-lg bg-[var(--card)]">
+              <span class="text-[var(--muted-foreground)]">Power:</span>
+              <strong>568 W</strong>
+            </div>
+            <div class="flex justify-between p-2 rounded-lg bg-[var(--card)]">
+              <span class="text-[var(--muted-foreground)]">Energy:</span>
+              <strong>118 Wh</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- 50-Foot Straight Line Wheel Speed Calibration Card -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-1.5">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">50-Ft Wheel Calibration</span>
+            <span class="text-xs font-mono text-[var(--muted-foreground)]">1 Pulse / Rev</span>
+          </div>
+          <div class="flex items-center justify-between gap-2 text-xs">
+            <span class="text-[var(--muted-foreground)]">Wheel Diameter (in):</span>
+            <input id="wheelDiaInput" type="number" step="0.1" value="20.0" class="w-20 px-2.5 py-1 rounded-lg bg-[var(--card)] border border-[var(--border)] font-mono font-bold text-right" />
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 4: LORA LINK HEALTH & 1-HR FLASH DATA DUMP            -->
+      <!-- ========================================================= -->
+      <div id="tab-data" class="hidden flex-1 flex flex-col justify-between space-y-2.5 min-h-0">
+
+        <!-- Deliverable: Packet Loss & Long Range Verification Card -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">LoRa Link & Packet Loss</span>
+            <span class="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-500 font-mono text-xs font-bold">PASS (&lt;2% Target)</span>
+          </div>
+          <div class="grid grid-cols-2 gap-2 font-mono text-xs">
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">TX Sent</div>
+              <div class="text-base font-black mt-0.5">8,620</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">RX Received</div>
+              <div class="text-base font-black mt-0.5">8,591</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Dropped Packets</div>
+              <div class="text-base font-black text-emerald-500 mt-0.5">29 (0.34%)</div>
+            </div>
+            <div class="p-2 rounded-xl bg-[var(--card)] border border-[var(--border)]">
+              <div class="text-[var(--muted-foreground)]">Signal (RSSI/SNR)</div>
+              <div class="text-base font-black mt-0.5">-62dBm / 9.8dB</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Deliverable: 3-Hour TX Onboard Flash Log Offload over LoRa -->
+        <div class="bg-[var(--background)] border border-[var(--border)] rounded-2xl p-3 space-y-2.5 flex-1 flex flex-col justify-between">
+          <div class="space-y-1">
+            <div class="text-xs font-bold uppercase tracking-wider text-[var(--foreground)]">Transmitter 3-Hr Flash Log</div>
+            <p class="text-xs text-[var(--muted-foreground)]">
+              Stored on TX LittleFS (<strong id="txLogCountDisplay" class="text-[var(--foreground)] font-mono">862 / 10800s</strong>). Offloads over LoRa in acknowledged binary chunks.
+            </p>
+          </div>
+
+          <div class="space-y-1.5 bg-[var(--card)] border border-[var(--border)] rounded-xl p-2.5">
+            <div class="flex justify-between text-xs font-mono">
+              <span id="dumpStatusLabel">Ready to offload from Trike TX</span>
+              <span id="dumpPercentLabel" class="font-bold">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-[var(--background)] rounded-full overflow-hidden border border-[var(--border)]">
+              <div id="dumpProgressBar" class="h-full bg-emerald-500 transition-all duration-150" style="width: 0%"></div>
+            </div>
+          </div>
+
+          <div class="space-y-2">
+            <button onclick="startLoraDump()" class="w-full py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition shadow-sm">
+              📡 Dump TX Flash Log over LoRa
+            </button>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="downloadSampleCsv('tx_telemetry_log.csv')" class="py-2 px-2.5 rounded-xl bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-semibold text-xs">
+                ⬇️ TX Log (.CSV)
+              </button>
+              <button onclick="downloadSampleCsv('race_laps_events.csv')" class="py-2 px-2.5 rounded-xl bg-[var(--secondary)] text-[var(--secondary-foreground)] border border-[var(--border)] font-semibold text-xs">
+                ⬇️ Race Events (.CSV)
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- 4. NATIVE iOS BOTTOM TAB BAR -->
+    <div class="px-2 pt-1.5 pb-2.5 bg-[var(--sidebar)] border-t border-[var(--border)] grid grid-cols-4 gap-1 shrink-0">
+      <button id="nav-race" onclick="switchTab('race')" class="py-1.5 rounded-xl bg-[var(--background)] text-[var(--foreground)] font-bold text-xs flex flex-col items-center gap-0.5 border border-[var(--border)]">
+        <span>🏁</span>
+        <span>Race & Map</span>
+      </button>
+      <button id="nav-laps" onclick="switchTab('laps')" class="py-1.5 rounded-xl text-[var(--muted-foreground)] font-semibold text-xs flex flex-col items-center gap-0.5 border border-transparent">
+        <span>⏱️</span>
+        <span>Laps & Pit</span>
+      </button>
+      <button id="nav-sensors" onclick="switchTab('sensors')" class="py-1.5 rounded-xl text-[var(--muted-foreground)] font-semibold text-xs flex flex-col items-center gap-0.5 border border-transparent">
+        <span>🧭</span>
+        <span>Sensors</span>
+      </button>
+      <button id="nav-data" onclick="switchTab('data')" class="py-1.5 rounded-xl text-[var(--muted-foreground)] font-semibold text-xs flex flex-col items-center gap-0.5 border border-transparent">
+        <span>💾</span>
+        <span>Data Dump</span>
+      </button>
+    </div>
+
+    <!-- 5. OPTIONAL SAFARI BOTTOM ADDRESS BAR SIMULATOR (Hidden in Fullscreen PWA Mode) -->
+    <div id="safariBottomBar" class="hidden px-4 pt-2 pb-3 bg-[#1c2633] border-t border-[var(--border)] shrink-0">
+      <div class="px-3 py-1.5 rounded-xl bg-[#0f1722] border border-[var(--border)] flex items-center justify-between text-xs text-[var(--muted-foreground)]">
+        <span>AA</span>
+        <span class="font-medium text-[var(--foreground)]">🔒 192.168.4.1</span>
+        <span>↻</span>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // --- TAB NAVIGATION ---
+    const tabs = ['race', 'laps', 'sensors', 'data'];
+    function switchTab(activeId) {
+      tabs.forEach(t => {
+        const panel = document.getElementById(`tab-${t}`);
+        const navBtn = document.getElementById(`nav-${t}`);
+        if (t === activeId) {
+          panel.classList.remove('hidden');
+          navBtn.className = "py-1.5 rounded-xl bg-[var(--background)] text-[var(--foreground)] font-bold text-xs flex flex-col items-center gap-0.5 border border-[var(--border)]";
+        } else {
+          panel.classList.add('hidden');
+          navBtn.className = "py-1.5 rounded-xl text-[var(--muted-foreground)] font-semibold text-xs flex flex-col items-center gap-0.5 border border-transparent";
+        }
+      });
+      if (activeId === 'race') drawTrack();
+    }
+
+    // Toggle simulated Safari Search Bar vs Fullscreen Home-Screen App
+    let safariBarVisible = false;
+    function toggleSafariBar() {
+      safariBarVisible = !safariBarVisible;
+      const bar = document.getElementById('safariBottomBar');
+      const btn = document.getElementById('safariBarBtn');
+      if (safariBarVisible) {
+        bar.classList.remove('hidden');
+        btn.textContent = "Mode: Safari Search Bar";
+      } else {
+        bar.classList.add('hidden');
+        btn.textContent = "Mode: Fullscreen PWA";
+      }
+      drawTrack();
+    }
+
+    // --- RACE STATE ---
+    let raceSeconds = 14 * 60 + 22;
+    let timerRunning = true;
+    let currentLap = 6;
+    let currentLapSec = 48.4;
+    let activeDriver = "Srinivas";
+    let queuedDriver = "Justin";
+    let totalDistanceMiles = 1.42;
+    let txRecordsLogged = 862;
+    let simSpeedMultiplier = 1;
+    let pitStopCount = 1;
+    let deliveryCount = 1;
+
+    // --- 10-TURN 0.25-MILE TRACK GEOMETRY ---
+    const canvas = document.getElementById('trackCanvas');
+    const ctx = canvas.getContext('2d');
+
+    const trackWaypoints = [
+      { x: 170, y: 195, speed: 21.5 }, // Start/Finish Straight
+      { x: 270, y: 192, speed: 22.8 }, // Fast Straight
+      { x: 310, y: 168, speed: 13.2 }, // Turn 1
+      { x: 318, y: 118, speed: 17.5 }, // Turn 2
+      { x: 275, y: 92,  speed: 12.4 }, // Turn 3
+      { x: 232, y: 116, speed: 11.8 }, // Turn 4 (Infield hairpin)
+      { x: 202, y: 74,  speed: 15.6 }, // Turn 5
+      { x: 242, y: 38,  speed: 19.2 }, // Turn 6
+      { x: 138, y: 32,  speed: 23.4 }, // Back Straight
+      { x: 62,  y: 45,  speed: 14.1 }, // Turn 7
+      { x: 38,  y: 92,  speed: 12.9 }, // Turn 8
+      { x: 74,  y: 134, speed: 13.8 }, // Turn 9
+      { x: 44,  y: 180, speed: 14.5 }, // Turn 10
+      { x: 108, y: 195, speed: 20.1 }  // Exit onto main straight
+    ];
+
+    const NUM_TRACK_PTS = 220;
+    const smoothTrack = [];
+    function catmullRom(p0, p1, p2, p3, t) {
+      const t2 = t * t;
+      const t3 = t2 * t;
+      return {
+        x: 0.5 * ((2 * p1.x) + (-p0.x + p2.x) * t + (2*p0.x - 5*p1.x + 4*p2.x - p3.x) * t2 + (-p0.x + 3*p1.x - 3*p2.x + p3.x) * t3),
+        y: 0.5 * ((2 * p1.y) + (-p0.y + p2.y) * t + (2*p0.y - 5*p1.y + 4*p2.y - p3.y) * t2 + (-p0.y + 3*p1.y - 3*p2.y + p3.y) * t3),
+        speed: p1.speed * (1 - t) + p2.speed * t
+      };
+    }
+
+    for (let i = 0; i < NUM_TRACK_PTS; i++) {
+      const progress = (i / NUM_TRACK_PTS) * trackWaypoints.length;
+      const idx = Math.floor(progress);
+      const frac = progress - idx;
+      const p0 = trackWaypoints[(idx - 1 + trackWaypoints.length) % trackWaypoints.length];
+      const p1 = trackWaypoints[idx % trackWaypoints.length];
+      const p2 = trackWaypoints[(idx + 1) % trackWaypoints.length];
+      const p3 = trackWaypoints[(idx + 2) % trackWaypoints.length];
+      smoothTrack.push(catmullRom(p0, p1, p2, p3, frac));
+    }
+
+    let trikeIdx = 18;
+    let startPin = { x: smoothTrack[0].x, y: smoothTrack[0].y, trackIndex: 0 };
+    let dropPinMode = false;
+    let simulatedDriftOffset = { x: 0, y: 0 };
+    let fusedErrorFeet = 3.4;
+
+    const raceEvents = [
+      { type: "LAP 5", badgeClass: "text-emerald-500", driver: "Srinivas", detail: "01:12.8 (18.9 mph)", time: "00:13:34" },
+      { type: "DELIVERY", badgeClass: "text-sky-500", driver: "Srinivas", detail: "Stop #1 Completed", time: "00:11:08" },
+      { type: "LAP 4", badgeClass: "text-emerald-500", driver: "Srinivas", detail: "01:14.1 (18.2 mph)", time: "00:12:21" },
+      { type: "PIT STOP", badgeClass: "text-amber-500", driver: "Justin → Srinivas", detail: "Driver Swap", time: "00:09:50" },
+      { type: "LAP 3", badgeClass: "text-emerald-500", driver: "Justin", detail: "01:15.4 (17.8 mph)", time: "00:08:12" }
+    ];
+
+    function renderEventTable() {
+      const tbody = document.getElementById('eventLogTableBody');
+      tbody.innerHTML = raceEvents.map(ev => `
+        <tr>
+          <td class="py-1.5 font-bold ${ev.badgeClass}">${ev.type}</td>
+          <td class="py-1.5 text-[var(--foreground)]">${ev.driver}</td>
+          <td class="py-1.5 text-[var(--muted-foreground)]">${ev.detail}</td>
+          <td class="py-1.5 text-right text-[var(--muted-foreground)]">${ev.time}</td>
+        </tr>
+      `).join('');
+      document.getElementById('statTotalLaps').textContent = `${currentLap - 1} Laps`;
+      document.getElementById('statMarkersCount').textContent = `${pitStopCount} / ${deliveryCount}`;
+    }
+
+    function formatHMS(totalSec) {
+      const hrs = Math.floor(totalSec / 3600);
+      const mins = Math.floor((totalSec % 3600) / 60);
+      const secs = Math.floor(totalSec % 60);
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+
+    function formatLapSplit(sec) {
+      const mins = Math.floor(sec / 60);
+      const rem = (sec % 60).toFixed(1);
+      return `${String(mins).padStart(2, '0')}:${rem.padStart(4, '0')}`;
+    }
+
+    function drawTrack() {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      ctx.fillStyle = "#16241c";
+      ctx.fillRect(0, 0, w, h);
+
+      ctx.strokeStyle = "rgba(255,255,255,0.04)";
+      ctx.lineWidth = 1;
+      for (let gx = 0; gx < w; gx += 30) {
+        ctx.beginPath(); ctx.moveTo(gx, 0); ctx.lineTo(gx, h); ctx.stroke();
+      }
+      for (let gy = 0; gy < h; gy += 30) {
+        ctx.beginPath(); ctx.moveTo(0, gy); ctx.lineTo(w, gy); ctx.stroke();
+      }
+
+      // Track Asphalt
+      ctx.save();
+      ctx.beginPath();
+      smoothTrack.forEach((pt, i) => {
+        if (i === 0) ctx.moveTo(pt.x, pt.y);
+        else ctx.lineTo(pt.x, pt.y);
+      });
+      ctx.closePath();
+      ctx.strokeStyle = "rgba(255,255,255,0.16)";
+      ctx.lineWidth = 19;
+      ctx.lineJoin = "round";
+      ctx.stroke();
+      ctx.strokeStyle = "#262f37";
+      ctx.lineWidth = 15;
+      ctx.stroke();
+      ctx.restore();
+
+      // Raw 1Hz GPS Dots
+      if (document.getElementById('showRawGpsToggle').checked) {
+        ctx.fillStyle = "rgba(251, 191, 36, 0.55)";
+        for (let i = 0; i < smoothTrack.length; i += 9) {
+          const pt = smoothTrack[i];
+          const jx = Math.sin(i * 1.7) * 5.0;
+          const jy = Math.cos(i * 2.3) * 5.0;
+          ctx.beginPath();
+          ctx.arc(pt.x + jx, pt.y + jy, 2.0, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // Fused Speed-Colored Trace
+      if (document.getElementById('showFusedToggle').checked) {
+        const curIdx = Math.floor(trikeIdx);
+        for (let i = 1; i <= curIdx; i++) {
+          const pPrev = smoothTrack[i - 1];
+          const pCurr = smoothTrack[i];
+          const ratio = i / Math.max(1, curIdx);
+          const dx = simulatedDriftOffset.x * ratio;
+          const dy = simulatedDriftOffset.y * ratio;
+
+          ctx.beginPath();
+          ctx.moveTo(pPrev.x + dx, pPrev.y + dy);
+          ctx.lineTo(pCurr.x + dx, pCurr.y + dy);
+
+          if (pCurr.speed > 19.0) ctx.strokeStyle = "#10b981";
+          else if (pCurr.speed > 14.5) ctx.strokeStyle = "#f59e0b";
+          else ctx.strokeStyle = "#ef4444";
+
+          ctx.lineWidth = 3.5;
+          ctx.stroke();
+        }
+      }
+
+      // Start/Finish Pin
+      ctx.save();
+      ctx.translate(startPin.x, startPin.y);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(-3, -10, 6, 20);
+      ctx.fillStyle = "#ef4444";
+      ctx.beginPath();
+      ctx.arc(0, -13, 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 12px monospace";
+      ctx.fillText("START PIN", 8, -9);
+      ctx.restore();
+
+      // Live Trike Dot
+      const activePt = smoothTrack[Math.floor(trikeIdx) % smoothTrack.length];
+      const tx = activePt.x + simulatedDriftOffset.x;
+      const ty = activePt.y + simulatedDriftOffset.y;
+
+      ctx.beginPath();
+      ctx.arc(tx, ty, 9, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(56, 189, 248, 0.28)";
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.arc(tx, ty, 5, 0, Math.PI * 2);
+      ctx.fillStyle = "#38bdf8";
+      ctx.fill();
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = "#ffffff";
+      ctx.stroke();
+    }
+
+    canvas.addEventListener('click', (e) => {
+      const rect = canvas.getBoundingClientRect();
+      const clickX = (e.clientX - rect.left) * (canvas.width / rect.width);
+      const clickY = (e.clientY - rect.top) * (canvas.height / rect.height);
+
+      let bestIdx = 0;
+      let bestDist = Infinity;
+      smoothTrack.forEach((pt, idx) => {
+        const d = Math.hypot(pt.x - clickX, pt.y - clickY);
+        if (d < bestDist) {
+          bestDist = d;
+          bestIdx = idx;
+        }
+      });
+
+      startPin = { x: smoothTrack[bestIdx].x, y: smoothTrack[bestIdx].y, trackIndex: bestIdx };
+      dropPinMode = false;
+      document.getElementById('dropPinBtn').textContent = "📍 Drop Pin";
+      document.getElementById('pinStatusText').textContent = `Pin #${bestIdx}`;
+      drawTrack();
+    });
+
+    function toggleDropPinMode() {
+      dropPinMode = !dropPinMode;
+      document.getElementById('dropPinBtn').textContent = dropPinMode ? "Tap Track..." : "📍 Drop Pin";
+    }
+
+    function snapPinToTrike() {
+      const idx = Math.floor(trikeIdx) % smoothTrack.length;
+      startPin = { x: smoothTrack[idx].x, y: smoothTrack[idx].y, trackIndex: idx };
+      document.getElementById('pinStatusText').textContent = "Pin @ Trike";
+      drawTrack();
+    }
+
+    function injectGpsDrift() {
+      simulatedDriftOffset.x += (Math.random() > 0.5 ? 10 : -10);
+      simulatedDriftOffset.y += (Math.random() > 0.5 ? 8 : -8);
+      fusedErrorFeet = +(fusedErrorFeet + 8.0).toFixed(1);
+      const errEl = document.getElementById('fusionErrorDisplay');
+      errEl.textContent = `±${fusedErrorFeet} ft (Drifted)`;
+      errEl.className = "text-amber-500 font-mono";
+      drawTrack();
+    }
+
+    function recordLap() {
+      const splitStr = formatLapSplit(currentLapSec);
+      const avgMph = document.getElementById('speedMphDisplay').textContent;
+
+      raceEvents.unshift({
+        type: `LAP ${currentLap}`,
+        badgeClass: "text-emerald-500",
+        driver: activeDriver,
+        detail: `${splitStr} (${avgMph} mph)`,
+        time: formatHMS(raceSeconds)
+      });
+
+      document.getElementById('lastEventOverlay').textContent = `Last: LAP ${currentLap} (${splitStr})`;
+      currentLap++;
+      currentLapSec = 0;
+
+      // Snap position back to Start Pin (0,0)
+      trikeIdx = startPin.trackIndex;
+      simulatedDriftOffset = { x: 0, y: 0 };
+      fusedErrorFeet = 1.8;
+
+      const errEl = document.getElementById('fusionErrorDisplay');
+      errEl.textContent = `±${fusedErrorFeet} ft`;
+      errEl.className = "text-emerald-500 font-mono";
+
+      document.getElementById('headerLapNum').textContent = currentLap;
+      renderEventTable();
+      drawTrack();
+
+      const toast = document.getElementById('loopClosureToast');
+      toast.classList.remove('hidden');
+      setTimeout(() => toast.classList.add('hidden'), 2400);
+    }
+
+    function selectQuickDriver(name) {
+      document.getElementById('nextDriverInput').value = name;
+      queueNextDriver();
+    }
+
+    function queueNextDriver() {
+      const val = document.getElementById('nextDriverInput').value.trim();
+      if (val) {
+        queuedDriver = val;
+        document.getElementById('headerNextDriver').textContent = queuedDriver;
+      }
+    }
+
+    function recordPitStop() {
+      const prevDriver = activeDriver;
+      activeDriver = queuedDriver;
+      pitStopCount++;
+
+      document.getElementById('headerActiveDriver').textContent = activeDriver;
+      document.getElementById('lastEventOverlay').textContent = `PIT: ${prevDriver} → ${activeDriver}`;
+
+      raceEvents.unshift({
+        type: "PIT STOP",
+        badgeClass: "text-amber-500",
+        driver: `${prevDriver} → ${activeDriver}`,
+        detail: "Driver Swap",
+        time: formatHMS(raceSeconds)
+      });
+      renderEventTable();
+    }
+
+    function recordDelivery() {
+      deliveryCount++;
+      document.getElementById('lastEventOverlay').textContent = `DELIVERY #${deliveryCount} @ ${formatHMS(raceSeconds)}`;
+      raceEvents.unshift({
+        type: "DELIVERY",
+        badgeClass: "text-sky-500",
+        driver: activeDriver,
+        detail: `Stop #${deliveryCount} (Lap ${currentLap})`,
+        time: formatHMS(raceSeconds)
+      });
+      renderEventTable();
+    }
+
+    function toggleRaceTimer() {
+      timerRunning = !timerRunning;
+      document.getElementById('timerToggleBtn').textContent = timerRunning ? "PAUSE" : "RESUME";
+    }
+
+    function resetRaceTimer() {
+      raceSeconds = 0;
+      currentLapSec = 0;
+      currentLap = 1;
+      document.getElementById('raceTimerDisplay').textContent = "00:00:00";
+      document.getElementById('headerLapNum').textContent = "1";
+      document.getElementById('headerLapSplit').textContent = "00:00.0";
+    }
+
+    function toggleSimSpeed() {
+      simSpeedMultiplier = simSpeedMultiplier === 1 ? 4 : 1;
+      document.getElementById('simSpeedBtn').textContent = `Speed: ${simSpeedMultiplier}x`;
+    }
+
+    let dumpInProgress = false;
+    function startLoraDump() {
+      if (dumpInProgress) return;
+      dumpInProgress = true;
+      const bar = document.getElementById('dumpProgressBar');
+      const pctLabel = document.getElementById('dumpPercentLabel');
+      const statusLabel = document.getElementById('dumpStatusLabel');
+
+      let pct = 0;
+      const interval = setInterval(() => {
+        pct += 10;
+        if (pct >= 100) {
+          pct = 100;
+          clearInterval(interval);
+          statusLabel.textContent = `✓ Offloaded ${txRecordsLogged} records!`;
+          pctLabel.textContent = "100%";
+          bar.style.width = "100%";
+          dumpInProgress = false;
+        } else {
+          statusLabel.textContent = `Bursting Chunk ${Math.ceil(pct/4)}/25...`;
+          pctLabel.textContent = `${pct}%`;
+          bar.style.width = `${pct}%`;
+        }
+      }, 130);
+    }
+
+    function downloadSampleCsv(filename) {
+      const csvRows = [
+        "seq_num,race_time_s,driver,lap,wheel_speed_mph,wheel_rpm,distance_ft,imu_roll_deg,imu_pitch_deg,imu_yaw_deg,fused_x_ft,fused_y_ft,rssi_dbm,event",
+        "858,858,Srinivas,6,19.4,325,7420,2.1,1.0,138,142.4,88.1,-61,NONE",
+        "859,859,Srinivas,6,18.8,315,7447,4.5,1.1,142,168.9,92.4,-62,NONE",
+        "860,860,Srinivas,6,18.6,312,7474,4.2,1.1,144,195.2,95.0,-62,LAP_RESET"
+      ].join("\n");
+      const blob = new Blob([csvRows], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // 10 Hz update loop
+    setInterval(() => {
+      if (!timerRunning) return;
+      const dt = 0.1 * simSpeedMultiplier;
+      raceSeconds += dt;
+      currentLapSec += dt;
+
+      const pt = smoothTrack[Math.floor(trikeIdx) % smoothTrack.length];
+      const nextPt = smoothTrack[(Math.floor(trikeIdx) + 1) % smoothTrack.length];
+      const wheelDia = parseFloat(document.getElementById('wheelDiaInput').value) || 20.0;
+      const speedMph = (pt.speed * (wheelDia / 20.0)) + (Math.sin(Date.now() / 400) * 0.3);
+      const speedFts = speedMph * 1.46667;
+      const wheelRpm = Math.round((speedMph * 1056) / (Math.PI * wheelDia));
+
+      trikeIdx = (trikeIdx + (speedMph / 45.0) * simSpeedMultiplier) % smoothTrack.length;
+      totalDistanceMiles += (speedMph / 36000.0) * simSpeedMultiplier;
+
+      const dx = nextPt.x - pt.x;
+      const dy = nextPt.y - pt.y;
+      const headingDeg = ((Math.atan2(dy, dx) * 180 / Math.PI) + 360) % 360;
+      const cornerFactor = (23.5 - pt.speed) * 0.75;
+
+      document.getElementById('raceTimerDisplay').textContent = formatHMS(raceSeconds);
+      document.getElementById('headerLapSplit').textContent = formatLapSplit(currentLapSec);
+      document.getElementById('speedMphDisplay').textContent = speedMph.toFixed(1);
+      document.getElementById('speedFtsDisplay').textContent = speedFts.toFixed(1);
+      document.getElementById('wheelRpmDisplay').textContent = wheelRpm;
+      document.getElementById('totalDistDisplay').textContent = `${totalDistanceMiles.toFixed(2)}mi`;
+      document.getElementById('lapDistDisplay').textContent = `${Math.round((trikeIdx / smoothTrack.length) * 1320)}ft`;
+
+      document.getElementById('imuRollDisplay').textContent = `${cornerFactor >= 0 ? '+' : ''}${cornerFactor.toFixed(1)}°`;
+      document.getElementById('imuYawDisplay').textContent = `${Math.round(headingDeg)}°`;
+      document.getElementById('imuGDisplay').textContent = `${(Math.abs(cornerFactor) * 0.06).toFixed(2)} G`;
+
+      drawTrack();
+    }, 100);
+
+    setInterval(() => {
+      if (!timerRunning) return;
+      txRecordsLogged = Math.min(10800, txRecordsLogged + 1);
+      document.getElementById('txLogCountDisplay').textContent = `${txRecordsLogged} / 10800s`;
+    }, 1000);
+
+    renderEventTable();
+    drawTrack();
+  </script>
+</body>
+</html>
