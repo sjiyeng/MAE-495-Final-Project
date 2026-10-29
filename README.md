@@ -13,7 +13,12 @@ A long-range 915 MHz LoRa telemetry, **3-hour onboard flash data-logging**, Kalm
 │   ├── iphone_dashboard_preview.html      # Standalone interactive iPhone Pitwall UI visualization
 │   └── README.md                          # Guide to the iPhone UI, 4-tab layout, and Safari vs. PWA modes
 └── test/
-    ├── README.md                          # Instructions for the 10 Hz LoRa hardware verification test
+    ├── README.md                          # Instructions for hardware & BLE verification tests
+    ├── test_ble_iphone/
+    │   ├── test_ble_iphone.ino            # 20 Hz iPhone 17 BLE (Bluefruit Connect) Heading test
+    │   └── compass_plotter.html           # Web Serial 2D Circular Compass + Rotating Arrow UI
+    ├── test_zig_iphone/
+    │   └── test_zig_iphone.ino            # 60 Hz iPhone 17 Wi-Fi UDP (ZIG SIM) Heading test
     ├── test_transmitter/
     │   └── test_transmitter.ino           # 10 Hz "Hello World #<n>" LoRa transmitter test sketch
     └── test_receiver/

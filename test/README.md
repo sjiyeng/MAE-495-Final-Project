@@ -8,6 +8,11 @@ This test verifies the hardware connection, SPI communication, and RF link betwe
 
 ```text
 test/
+├── test_ble_iphone/
+│   ├── test_ble_iphone.ino    # Connects to iPhone 17 via BLE ("Bluefruit Connect") & prints Heading at 20 Hz
+│   └── compass_plotter.html   # Web Serial 2D circular compass with rotating heading arrow
+├── test_zig_iphone/
+│   └── test_zig_iphone.ino    # Connects to iPhone 17 via Wi-Fi UDP ("ZIG SIM") at 60 Hz
 ├── test_transmitter/
 │   └── test_transmitter.ino   # Transmits "Hello World #<n>" every 100 ms (10 Hz)
 ├── test_receiver/
@@ -61,4 +66,38 @@ These sketches are tuned for high update rates:
    #3    | Hello World #3        |  -39.0 dBm |  10.1 dB |  100 ms
    #4    | Hello World #4        |  -38.5 dBm |  10.0 dB |   99 ms
    #5    | Hello World #5        |  -39.0 dBm |  10.4 dB |  100 ms
+   ```
+
+---
+
+## 4. iPhone 17 BLE Heading Test (`test_ble_iphone`)
+
+This test verifies the Bluetooth Low Energy (BLE) Nordic UART Service (NUS) link between the **Transmitter XIAO ESP32S3** (`ASME-Trike-TX`) and a trike-mounted **iPhone 17**, printing IMU Heading to the Serial Monitor at **`20 Hz` (every `50 ms`)**.
+
+### Step 1: Install the iPhone App
+1. Open the **Apple App Store** on your iPhone 17 and install **[Bluefruit Connect](https://apps.apple.com/us/app/bluefruit-connect/id830125974)** (by *Adafruit Industries* — free).
+2. When prompted by iOS, allow **Bluetooth** permission.
+
+### Step 2: Upload the Sketch to the Transmitter Board
+1. Open `test/test_ble_iphone/test_ble_iphone.ino` in the Arduino IDE.
+2. Select **Seeed XIAO ESP32S3** as the board, enable **USB CDC On Boot: "Enabled"** under the *Tools* menu, and upload the sketch.
+3. Open the Serial Monitor at **115200 baud**. You will see:
+   ```text
+   [BLE] Advertising started as 'ASME-Trike-TX'
+   [BLE] Open 'Bluefruit Connect' on iPhone 17 -> Connect -> Controller
+   [BLE] Enable: Quaternion (or Magnetometer) for 20 Hz Heading
+   ```
+
+### Step 3: Stream Heading Data from Bluefruit Connect
+1. Open **Bluefruit Connect** on your iPhone 17.
+2. Find **`ASME-Trike-TX`** in the Peripherals list and tap **Connect**.
+3. Tap **Controller** in the module menu.
+4. Under the **Sensor Data** switches at the top, toggle **ON**:
+   * **Quaternion** (streams fused 9-DoF CoreMotion orientation `!Q` for `0–360°` Heading)
+   * *(Optional fallback)* **Magnetometer** (streams raw magnetic compass heading `!M`)
+5. Watch the Serial Monitor stream Heading at **`20 Hz` (every `50 ms`)**:
+   ```text
+   Heading:  142.3 deg
+   Heading:  142.5 deg
+   Heading:  142.8 deg
    ```

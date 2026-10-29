@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ASME e-HPVC — Live 60 Hz LoRa Heading Compass Plotter</title>
+  <style>
+    :root {
+      --bg: #0b0f17;
+      --card: #131b2e;
+      --border: #23304d;
+      --text: #f1f5f9;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+      --red: #ef4444;
+      --green: #22c55e;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 24px;
+      max-width: 480px;
+      width: 100%;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    h1 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      letter-spacing: 0.02em;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 0.82rem;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 18px;
+    }
+    button {
+      background: #1e293b;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 9px 14px;
+      border-radius: 10px;
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    button:hover { border-color: var(--accent); }
+    button.primary {
+      background: var(--accent);
+      color: #090d16;
+      border-color: var(--accent);
+    }
+    button.primary.connected {
+      background: var(--green);
+      border-color: var(--green);
+    }
+    canvas {
+      display: block;
+      margin: 0 auto 14px auto;
+      background: #090d16;
+      border-radius: 50%;
+      border: 2px solid var(--border);
+    }
+    .readout {
+      font-size: 2.2rem;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      color: var(--accent);
+      margin-bottom: 4px;
+    }
+    .rf-badges {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin: 8px 0 10px 0;
+      font-size: 0.78rem;
+      color: var(--text);
+    }
+    .badge {
+      background: #1e293b;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 4px 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .status {
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ASME e-HPVC — 60 Hz LoRa Heading Compass</h1>
+    <p class="subtitle">Connect to your Receiver (or Transmitter) XIAO ESP32S3 USB COM port in Chrome or Edge.</p>
+
+    <div class="controls">
+      <button id="connectBtn" class="primary">🔌 Connect USB Serial (115200)</button>
+      <button id="zeroBtn" disabled>🎯 Zero Here ('z')</button>
+      <button id="compassBtn" disabled>🧭 Compass Reset ('c')</button>
+    </div>
+
+    <canvas id="compassCanvas" width="320" height="320"></canvas>
+
+    <div class="readout" id="headingValue">---.-°</div>
+    <div class="rf-badges">
+      <span class="badge" id="hzBadge">Rate: -- Hz</span>
+      <span class="badge" id="rssiBadge">RSSI: -- dBm</span>
+      <span class="badge" id="snrBadge">SNR: -- dB</span>
+    </div>
+    <div class="status" id="statusText">Disconnected — Waiting for USB Serial connection</div>
+  </div>
+
+  <script>
+    const connectBtn = document.getElementById('connectBtn');
+    const zeroBtn = document.getElementById('zeroBtn');
+    const compassBtn = document.getElementById('compassBtn');
+    const headingValue = document.getElementById('headingValue');
+    const hzBadge = document.getElementById('hzBadge');
+    const rssiBadge = document.getElementById('rssiBadge');
+    const snrBadge = document.getElementById('snrBadge');
+    const statusText = document.getElementById('statusText');
+    const canvas = document.getElementById('compassCanvas');
+    const ctx = canvas.getContext('2d');
+
+    let port = null;
+    let writer = null;
+    let currentHeading = 0;
+    let currentRSSI = null;
+    let currentSNR = null;
+    let hasData = false;
+    let packetsThisSecond = 0;
+    let measuredHz = 0;
+
+    // Measure incoming serial sample rate every 1 second
+    setInterval(() => {
+      measuredHz = packetsThisSecond;
+      packetsThisSecond = 0;
+      if (hasData) {
+        hzBadge.textContent = `Rate: ${measuredHz} Hz`;
+        statusText.textContent = `Streaming live at ${measuredHz} Hz (60 fps render) from XIAO ESP32S3`;
+      }
+    }, 1000);
+
+    function drawCompass(headingDeg) {
+      const w = canvas.width;
+      const h = canvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = cx - 26;
+
+      ctx.clearRect(0, 0, w, h);
+
+      // Outer ring & degree ticks
+      ctx.save();
+      ctx.translate(cx, cy);
+
+      for (let deg = 0; deg < 360; deg += 5) {
+        const rad = (deg - 90) * Math.PI / 180;
+        const isMajor = (deg % 30 === 0);
+        const isCardinal = (deg % 90 === 0);
+        const innerR = isCardinal ? r - 16 : (isMajor ? r - 11 : r - 6);
+
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(rad) * innerR, Math.sin(rad) * innerR);
+        ctx.lineTo(Math.cos(rad) * r, Math.sin(rad) * r);
+        ctx.strokeStyle = isCardinal ? '#f1f5f9' : (isMajor ? '#64748b' : '#334155');
+        ctx.lineWidth = isCardinal ? 2.5 : (isMajor ? 1.5 : 1);
+        ctx.stroke();
+      }
+
+      // Cardinal Labels
+      const labels = [
+        { text: 'N (0°)', angle: 0, color: '#ef4444' },
+        { text: 'E (90°)', angle: 90, color: '#94a3b8' },
+        { text: 'S (180°)', angle: 180, color: '#94a3b8' },
+        { text: 'W (270°)', angle: 270, color: '#94a3b8' }
+      ];
+      ctx.font = 'bold 12px -apple-system, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      labels.forEach(lbl => {
+        const rad = (lbl.angle - 90) * Math.PI / 180;
+        const labelR = r - 30;
+        ctx.fillStyle = lbl.color;
+        ctx.fillText(lbl.text, Math.cos(rad) * labelR, Math.sin(rad) * labelR);
+      });
+
+      // Crosshairs
+      ctx.beginPath();
+      ctx.moveTo(-r + 48, 0); ctx.lineTo(r - 48, 0);
+      ctx.moveTo(0, -r + 48); ctx.lineTo(0, r - 48);
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.15)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      // Heading Arrow (0 deg = Up / North, rotates clockwise)
+      if (hasData) {
+        const arrowAngle = headingDeg * Math.PI / 180;
+        ctx.save();
+        ctx.rotate(arrowAngle);
+
+        const tipY = -(r - 45);
+        const tailY = (r - 65);
+
+        // Tail
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, tailY);
+        ctx.strokeStyle = '#475569';
+        ctx.lineWidth = 4;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Main Forward Arrow
+        ctx.beginPath();
+        ctx.moveTo(0, 0);
+        ctx.lineTo(0, tipY + 14);
+        ctx.strokeStyle = '#38bdf8';
+        ctx.lineWidth = 5;
+        ctx.lineCap = 'round';
+        ctx.stroke();
+
+        // Arrowhead triangle
+        ctx.beginPath();
+        ctx.moveTo(0, tipY);
+        ctx.lineTo(-11, tipY + 22);
+        ctx.lineTo(0, tipY + 16);
+        ctx.lineTo(11, tipY + 22);
+        ctx.closePath();
+        ctx.fillStyle = '#ef4444';
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      // Center Pivot Dot
+      ctx.beginPath();
+      ctx.arc(0, 0, 6, 0, Math.PI * 2);
+      ctx.fillStyle = '#f1f5f9';
+      ctx.fill();
+
+      ctx.restore();
+    }
+
+    // 60 Hz requestAnimationFrame render loop
+    function renderLoop() {
+      drawCompass(currentHeading);
+      if (hasData) {
+        headingValue.textContent = currentHeading.toFixed(1) + '°';
+        if (currentRSSI !== null) rssiBadge.textContent = `RSSI: ${currentRSSI.toFixed(1)} dBm`;
+        if (currentSNR !== null) snrBadge.textContent = `SNR: ${currentSNR.toFixed(1)} dB`;
+      }
+      requestAnimationFrame(renderLoop);
+    }
+    requestAnimationFrame(renderLoop);
+
+    async function sendCommand(ch) {
+      if (!writer) return;
+      const data = new TextEncoder().encode(ch);
+      await writer.write(data);
+    }
+
+    zeroBtn.addEventListener('click', () => sendCommand('z'));
+    compassBtn.addEventListener('click', () => sendCommand('c'));
+
+    connectBtn.addEventListener('click', async () => {
+      if (!('serial' in navigator)) {
+        alert('Web Serial API requires Google Chrome or Microsoft Edge.');
+        return;
+      }
+      try {
+        port = await navigator.serial.requestPort();
+        await port.open({ baudRate: 115200 });
+
+        writer = port.writable.getWriter();
+        connectBtn.textContent = '✅ Connected (115200)';
+        connectBtn.classList.add('connected');
+        zeroBtn.disabled = false;
+        compassBtn.disabled = false;
+        statusText.textContent = 'Connected — Waiting for 60 Hz LoRa stream...';
+
+        const textDecoder = new TextDecoderStream();
+        port.readable.pipeTo(textDecoder.writable);
+        const reader = textDecoder.readable.getReader();
+
+        let buffer = '';
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += value;
+          let lines = buffer.split(/\r?\n/);
+          buffer = lines.pop();
+
+          for (const line of lines) {
+            const hMatch = line.match(/Heading:\s*([0-9.]+)/i);
+            if (hMatch) {
+              currentHeading = parseFloat(hMatch[1]);
+              hasData = true;
+              packetsThisSecond++;
+
+              const rMatch = line.match(/RSSI:\s*([-0-9.]+)/i);
+              if (rMatch) currentRSSI = parseFloat(rMatch[1]);
+
+              const sMatch = line.match(/SNR:\s*([-0-9.]+)/i);
+              if (sMatch) currentSNR = parseFloat(sMatch[1]);
+            }
+          }
+        }
+      } catch (err) {
+        statusText.textContent = 'Connection error: ' + err.message;
+      }
+    });
+  </script>
+</body>
+</html>
