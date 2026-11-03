@@ -1,13 +1,13 @@
-# ASME e-HPVC — 60 Hz iPhone 17 (ZIG SIM) $\rightarrow$ LoRa $\rightarrow$ Receiver Dashboard Test
+# ASME e-HPVC — High-Speed iPhone 17 (ZIG SIM) $\rightarrow$ LoRa $\rightarrow$ Receiver Dashboard & Diagnostics Test
 
-This folder contains the complete end-to-end **60 Hz** wireless heading pipeline from the trike-mounted **iPhone 17** to the **Pitwall Receiver** and **2D Circular Compass Dashboard**:
+This folder contains the complete end-to-end wireless heading and link-diagnostics pipeline from the trike-mounted **iPhone 17** to the **Pitwall Receiver** (`http://192.168.4.1` and USB Serial):
 
 ```mermaid
 flowchart LR
-    Phone["iPhone 17\n(ZIG SIM App)"] -- "60 Hz Wi-Fi UDP\n(192.168.4.1:50000)" --> TX["Transmitter XIAO ESP32S3\n+ Wio-SX1262"]
-    TX -- "60 Hz 915 MHz LoRa\n(500 kHz BW, SF7, 9 Bytes)" --> RX["Receiver XIAO ESP32S3\n+ Wio-SX1262"]
-    RX -- "60 Hz USB Serial\n(115200 baud)" --> Web["compass_plotter.html\n(Chrome / Edge Web Serial)"]
-    RX -. "Wi-Fi SoftAP\n(http://192.168.4.1)" .-> PitUI["Built-in Receiver\nWeb Compass UI"]
+    Phone["iPhone 17\n(ZIG SIM App)"] -- "60 Hz Wi-Fi UDP\n(ASME-Trike-TX\n192.168.4.1:50000)" --> TX["Transmitter XIAO ESP32S3\n+ Wio-SX1262"]
+    TX -- "50 Hz 915 MHz LoRa\n(500 kHz BW, SF7, 12 Bytes)" --> RX["Receiver XIAO ESP32S3\n+ Wio-SX1262\n(Core 1: LoRa ISR)"]
+    RX -- "Core 0: Wi-Fi SoftAP\n(ASME-Pitwall-RX\nhttp://192.168.4.1)" --> PitUI["2-Tab Web Dashboard\n(Compass + Diagnostics)"]
+    RX -. "USB Serial\n(115200 baud)" .-> Web["compass_plotter.html\n(Chrome / Edge Web Serial)"]
 ```
 
 ---
@@ -18,113 +18,94 @@ When you open either `.ino` file in the Arduino IDE, the companion `.h` files au
 
 ```text
 test_zig_lora_60hz/
-├── README.md                          # Complete setup & architecture guide (this file)
-├── compass_plotter.html               # 2-Tab Webpage (60 Hz Compass + Connectivity & Diagnostics)
+├── README.md                          # Complete setup, build & architecture guide (this file)
+├── compass_plotter.html               # 2-Tab Webpage (Compass + Connectivity & Diagnostics)
+├── fast_build.ps1                     # Persistent-cache incremental compiler & auto-port uploader
+├── upload_transmitter.bat             # One-click cached compile & upload for Transmitter
+├── upload_receiver.bat                # One-click cached compile & upload for Receiver
 ├── zig_lora_transmitter/
 │   ├── zig_lora_transmitter.ino       # Main setup() & loop() orchestration
 │   ├── imu_math.h                     # 3D Quaternion reference pose lock & Euler heading math
 │   ├── zig_sim_wifi.h                 # "ASME-Trike-TX" SoftAP, iPhone RSSI check, ZIG SIM UDP parser
-│   └── lora_protocol.h                # 60 Hz Wio-SX1262 config, 12-byte packet struct & TX ISR
+│   └── lora_protocol.h                # Wio-SX1262 config, 12-byte packet struct & non-blocking TX ISR
 └── zig_lora_receiver/
     ├── zig_lora_receiver.ino          # Main setup() & loop() orchestration
-    ├── lora_protocol.h                # 60 Hz Wio-SX1262 config, 12-byte packet struct & RX ISR
-    ├── web_server.h                   # "ASME-Pitwall-RX" Wi-Fi SoftAP & HTTP JSON endpoints
+    ├── lora_protocol.h                # Wio-SX1262 config, 12-byte packet struct & Core 1 RX ISR
+    ├── web_server.h                   # Core 0 "ASME-Pitwall-RX" Wi-Fi SoftAP & HTTP JSON endpoints
     └── dashboard_html.h               # 2-Tab PROGMEM HTML webpage (identical to compass_plotter.html)
 ```
 
 ---
 
-## 2. How 60 Hz (`16.6 ms` Frame Budget) Works Over LoRa & Wi-Fi Simultaneously
+## 2. Architecture & Low-Packet-Loss Engineering (`< 2%` Target)
 
-Standard LoRa configurations (`BW = 125–250 kHz` sending ASCII text strings) take `15–75 ms` of airtime per packet—which is too slow for 60 Hz (`16.67 ms` per frame) and would block the ESP32S3 from reading incoming Wi-Fi UDP packets.
+To achieve smooth real-time heading updates while keeping packet loss under $2\%$:
 
-To achieve a true **60 Hz** update rate end-to-end:
-1. **High-Speed LoRa RF Parameters (`~4.8 ms` Airtime):**
-   * **Frequency:** `915.0 MHz`
-   * **Bandwidth:** `500.0 kHz` (Halves symbol time compared to 250 kHz)
-   * **Spreading Factor:** `SF7`
-   * **Coding Rate:** `4/5`
-   * **Preamble Length:** `6 symbols`
-2. **Compact 12-Byte Binary Packet (`LoRaHeadingPacket` with End-to-End Diagnostics):**
-   * Instead of ASCII strings, the transmitter sends a packed 12-byte struct (`~5.3 ms` airtime):
-     * `magic` (`1 byte`, `0xA5`)
-     * `flags` (`1 byte` bitmask: `Phone Wi-Fi Connected`, `ZIG SIM Streaming Active`, `3D Quaternion Pose Locked`)
-     * `seq` (`2 bytes`, rolling packet counter)
-     * `heading_x10` (`2 bytes`, `0..3600` $\rightarrow$ `0.0°..360.0°`)
-     * `roll_x10` (`2 bytes`, `-1800..+1800` $\rightarrow$ `-180.0°..+180.0°`)
-     * `pitch_x10` (`2 bytes`, `-900..+900` $\rightarrow$ `-90.0°..+90.0°`)
-     * `zig_hz` (`1 byte`, measured ZIG SIM UDP packet rate on the Transmitter in `Hz`)
-     * `phone_rssi` (`1 byte`, iPhone Wi-Fi signal strength at the Transmitter in `dBm`)
-   * The Transmitter sends a continuous heartbeat even before ZIG SIM starts streaming so the Receiver's **Connectivity & Diagnostics** tab always shows whether the iPhone is connected to the Transmitter's Wi-Fi network.
-3. **Non-Blocking `DIO1` Hardware Interrupts:**
-   * `zig_lora_transmitter.ino` uses `radio.startTransmit()` with an `IRAM_ATTR` interrupt on `GPIO 39 (DIO1)`. Starting a LoRa transmission takes `< 0.3 ms` of CPU time, leaving the ESP32S3 >98% free to drain incoming 60 Hz Wi-Fi UDP packets from the iPhone without lag or dropped frames.
-4. **3D Orientation-Independent Heading (`dQ_world = Q_current * conjugate(Q_ref)`):**
-   * Automatically captures the iPhone's 3D mounting pose on the first Quaternion packet received and extracts horizontal rotation around the Earth's true vertical (gravity) $Z$-axis, preventing gimbal lock regardless of how the phone is mounted on the trike.
+1. **Dual-Core ESP32S3 Separation on the Receiver (`Core 0` vs. `Core 1`):**
+   * **`Core 0` (`WebServerTask` in `web_server.h`):** Runs the `ASME-Pitwall-RX` Wi-Fi SoftAP and services HTTP requests (`/`, `/state`, `/zero`, `/reset`, `/clear_stats`) with Wi-Fi modem sleep disabled (`WiFi.setSleep(false)`).
+   * **`Core 1` (`loop()` in `zig_lora_receiver.ino`):** 100% dedicated to servicing `DIO1` LoRa hardware interrupts (`processIncomingLoRaPackets()`), ensuring Wi-Fi TCP handshakes never block or drop incoming LoRa packets.
+2. **Non-Blocking USB Serial (`Serial.availableForWrite() >= 128`):**
+   * Both Transmitter and Receiver check TX buffer space before printing to `Serial`, preventing the ESP32S3 USB CDC buffer from stalling `loop()` when running purely on Wi-Fi without a Serial Monitor open.
+3. **High-Speed LoRa RF Parameters (`~5.3 ms` Airtime at `50 Hz` / `20 ms` Interval):**
+   * **Frequency:** `915.0 MHz` | **Bandwidth:** `500.0 kHz` | **Spreading Factor:** `SF7` | **Coding Rate:** `4/5` | **Preamble:** `8 symbols` | **Output Power:** `10 dBm` (prevents close-range LNA saturation on the bench while covering the full track).
+4. **Compact 12-Byte Binary Packet (`LoRaHeadingPacket`):**
+   * `magic` (`1B`, `0xA5`)
+   * `flags` (`1B` bitmask: `FLAG_PHONE_WIFI_CONN`, `FLAG_ZIG_STREAMING`, `FLAG_HAS_QUAT`)
+   * `seq` (`2B`, rolling counter incremented *only* when a packet is actually transmitted over the air)
+   * `heading_x10` (`2B`, `0.0°..360.0°`), `roll_x10` (`2B`), `pitch_x10` (`2B`)
+   * `zig_hz` (`1B`, measured ZIG SIM UDP packet rate on Transmitter)
+   * `phone_rssi` (`1B`, iPhone Wi-Fi signal strength at Transmitter in `dBm`)
 
 ---
 
-## 3. Hardware & Pin Mapping (Both Boards)
+## 3. Fast Cached Compiling & Uploading (`upload_transmitter.bat` / `upload_receiver.bat`)
 
-Both the Transmitter and Receiver use a **Seeed Studio XIAO ESP32S3** attached to a **Wio-SX1262** via the B2B connector (make sure both the **915 MHz LoRa antenna** and the **2.4 GHz Wi-Fi antenna** are connected):
+Instead of waiting 75+ seconds for the Arduino IDE to recompile `RadioLib` and the ESP32S3 core on every build, use the included scripts:
 
-| Function | ESP32S3 GPIO | Description |
-| :--- | :--- | :--- |
-| **`LORA_LDO_EN`** | `GPIO 38` | Wio-SX1262 Power & RF Switch Enable (driven `HIGH`) |
-| **`LORA_NSS`** | `GPIO 41` | SPI Chip Select |
-| **`LORA_DIO1`** | `GPIO 39` | Hardware Packet Interrupt (`TX Done` / `RX Done`) |
-| **`LORA_NRST`** | `GPIO 42` | Radio Hardware Reset |
-| **`LORA_BUSY`** | `GPIO 40` | Radio Busy Status Line |
-| **`TCXO`** | `1.6 V` | Internal TCXO reference voltage |
+* **Double-click `upload_transmitter.bat`:** Compiles `zig_lora_transmitter` into a permanent `.build_cache/` folder on your SSD (with a live `0% -> 100%` `.o` object file progress bar), auto-detects the plugged-in XIAO ESP32S3 COM port, and flashes the board.
+* **Double-click `upload_receiver.bat`:** Automatically seeds its `.build_cache/` from the Transmitter's compiled `core` and `libraries` (skipping the cold build), compiles `zig_lora_receiver` in ~20 seconds, and flashes the Receiver board.
 
 ---
 
 ## 4. Step-by-Step Setup Instructions
 
-### Step 1: Flash the Transmitter Board
-1. Open `zig_lora_transmitter/zig_lora_transmitter.ino` in the Arduino IDE.
-2. Select **Seeed XIAO ESP32S3** as the board (`Tools -> USB CDC On Boot: "Enabled"`).
-3. Upload to the **Transmitter** board.
-   * Once powered on, it creates an open Wi-Fi hotspot named **`ASME-Trike-TX`** (`192.168.4.1`).
+### Step 1: Flash Both Boards
+1. Plug in the **Transmitter** XIAO ESP32S3 + Wio-SX1262 and double-click **`upload_transmitter.bat`**.
+2. Plug in the **Receiver** XIAO ESP32S3 + Wio-SX1262 and double-click **`upload_receiver.bat`**.
 
-### Step 2: Flash the Receiver Board
-1. Open `zig_lora_receiver/zig_lora_receiver.ino` in the Arduino IDE.
-2. Select **Seeed XIAO ESP32S3** (`Tools -> USB CDC On Boot: "Enabled"`) and upload to the **Receiver** board.
-3. Leave the **Receiver** board plugged into your computer via USB (and **close** the Arduino Serial Monitor / Serial Plotter so the COM port is unlocked for the web compass).
-
-### Step 3: Configure ZIG SIM on Your iPhone 17
+### Step 2: Configure ZIG SIM on Your iPhone 17 (Trike Node)
 1. Install **[ZIG SIM](https://apps.apple.com/us/app/zig-sim/id1112909974)** (free on the Apple App Store).
-2. Open **iPhone Settings -> Wi-Fi** and connect to **`ASME-Trike-TX`** (no password required).
-3. Open **ZIG SIM** and go to the **Settings** tab at the bottom:
-
-   | ZIG SIM Setting | Value |
-   | :--- | :--- |
-   | **DATA DESTINATION** | `OTHER APP` |
-   | **PROTOCOL** | `UDP` |
-   | **IP ADDRESS** | `192.168.4.1` |
-   | **PORT NUMBER** | `50000` *(default)* |
-   | **MESSAGE FORMAT** | `JSON` *(or `OSC` — both are supported)* |
-   | **MESSAGE RATE PER SEC** | `60` |
-
-4. Go to the **Sensor** tab in ZIG SIM and select **`QUATERNION`** (uncheck all other sensors).
-5. Tap the **`Start`** tab at the bottom of ZIG SIM (allow Local Network access if prompted by iOS).
-   * *Tip:* Turn your iPhone screen brightness down to `0%` while on the black `Start` screen to save battery, or use iOS **Guided Access** (triple-click side button) to disable accidental screen touches while mounted.
+2. Connect your iPhone 17 Wi-Fi to **`ASME-Trike-TX`** (open network, no password).
+3. Open **ZIG SIM** $\rightarrow$ **Settings** tab:
+   * **DATA DESTINATION:** `OTHER APP`
+   * **PROTOCOL:** `UDP`
+   * **IP ADDRESS:** `192.168.4.1`
+   * **PORT NUMBER:** `50000`
+   * **MESSAGE FORMAT:** `JSON` *(or `OSC`)*
+   * **MESSAGE RATE PER SEC:** `60`
+4. In the **Sensor** tab, select **`QUATERNION`** only, then tap the **`Start`** tab.
 
 ---
 
-## 5. Visualizing on the Receiver (Wi-Fi Network or USB Serial — Same Webpage!)
-
-Both the Receiver's built-in Wi-Fi web server (`http://192.168.4.1`) and `compass_plotter.html` serve the **exact same 2-Tab HTML interface**:
-* **Tab 1 (`🧭 Live Compass`):** 60 Hz 2D Circular Compass with rotating heading arrow, quick status dots (`Phone`, `ZIG Hz`, `LoRa dBm`, `RX Hz`), and **`🎯 Zero Here ('z')`** / **`🧭 Compass Reset ('c')`** buttons.
-* **Tab 2 (`📡 Connectivity & Diagnostics`):**
-  * **4-Stage End-to-End Pipeline (`📱 iPhone 17` $\rightarrow$ `📤 ZIG UDP` $\rightarrow$ `📻 915 MHz` $\rightarrow$ `📥 Pitwall RX`)**
-  * **Trike iPhone $\leftrightarrow$ Transmitter Link:** iPhone Wi-Fi Connected (`CONNECTED` / `DISCONNECTED`), ZIG SIM Streaming status (`STREAMING ACTIVE` / `PAUSED`), ZIG SIM UDP Update Rate (`Hz`), and iPhone Wi-Fi Signal Strength (`dBm` + signal meter).
-  * **915 MHz LoRa Radio Link:** LoRa Link Status (`ONLINE` / `NO LORA SIGNAL`), LoRa RSSI (`dBm` + signal meter), LoRa SNR (`dB`), LoRa Receive Rate (`Hz`), Packet Loss `%` (`lost / rx`), and Last Packet Age (`ms`).
-  * **Attitude & Orientation Lock:** 3D Mounting Pose Lock status, live `Heading / Roll / Pitch`, and active dashboard connection source.
+## 5. Viewing the Receiver Dashboard & Diagnostics (`http://192.168.4.1`)
 
 ### Way A: Connect Over Wi-Fi (`ASME-Pitwall-RX`)
-1. Connect your laptop or pitwall phone Wi-Fi to **`ASME-Pitwall-RX`** (open network, no password).
-2. Open **`http://192.168.4.1`** in any browser (or simply double-click `compass_plotter.html` while connected to `ASME-Pitwall-RX` Wi-Fi—it automatically fetches `http://192.168.4.1/state`!).
+1. Connect your laptop or pitwall phone Wi-Fi to **`ASME-Pitwall-RX`** (open network).
+2. Open **`http://192.168.4.1`** in any web browser (or open `compass_plotter.html` locally while connected to `ASME-Pitwall-RX` Wi-Fi).
 
 ### Way B: Connect Over USB Serial (`compass_plotter.html`)
 1. Double-click `compass_plotter.html` in **Google Chrome** or **Microsoft Edge**.
-2. Click **`🔌 USB Serial (Optional)`** and select the **Receiver** (or Transmitter) XIAO ESP32S3 COM port.
+2. Click **`🔌 USB Serial (Optional)`** and select the Receiver's COM port.
+
+### Dashboard Tabs & Interactive Controls
+* **Tab 1 — `🧭 Live Compass`:**
+  * 60 fps 2D circular compass dial with rotating heading arrow and live status pills (`Phone`, `ZIG Hz`, `LoRa dBm`, `RX Hz`).
+* **Tab 2 — `📡 Connectivity & Diagnostics`:**
+  * **4-Stage Pipeline:** Live status cards for `📱 iPhone 17` $\rightarrow$ `📤 ZIG UDP` $\rightarrow$ `📻 915 MHz` $\rightarrow$ `📥 Pitwall RX`.
+  * **Trike Link:** iPhone Wi-Fi Connected status, ZIG SIM Streaming status, ZIG SIM Update Rate (`Hz`), and iPhone Wi-Fi RSSI (`dBm` + signal bar).
+  * **LoRa Link:** LoRa Link status, LoRa RSSI (`dBm` + signal bar), LoRa SNR (`dB`), LoRa Receive Rate (`Hz`), Packet Loss `%` (`lost / rx`), and Last Packet Age (`ms`).
+  * **Attitude:** 3D Mounting Reference Pose Lock status and live `Heading / Roll / Pitch`.
+* **Action Buttons (Work over both Wi-Fi and USB Serial):**
+  * **`🎯 Zero Here ('z')`:** Locks the current heading as `0.0°`.
+  * **`🧭 Compass Reset ('c')`:** Resets to the un-offset compass heading.
+  * **`🔄 Reset Loss ('r')`:** Clears the Receiver's `lost` and `rx` packet counters back to `0.00% (0 lost / 0 rx)`.

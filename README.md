@@ -22,13 +22,14 @@ A long-range 915 MHz LoRa telemetry, **3-hour onboard flash data-logging**, Kalm
     │   ├── README.md
     │   ├── test_zig_iphone.ino
     │   └── compass_plotter.html
-    ├── test_zig_lora_60hz/                # End-to-end 60 Hz iPhone (ZIG SIM) -> LoRa TX -> LoRa RX + Compass UI
-    │   ├── README.md
-    │   ├── compass_plotter.html
-    │   ├── zig_lora_transmitter/
-    │   │   └── zig_lora_transmitter.ino
-    │   └── zig_lora_receiver/
-    │       └── zig_lora_receiver.ino
+    ├── test_zig_lora_60hz/                # End-to-end iPhone (ZIG SIM) -> LoRa TX -> LoRa RX + 2-Tab Web Dashboard
+    │   ├── README.md                      # Setup, dual-core architecture & fast-build guide
+    │   ├── compass_plotter.html           # 2-Tab Webpage (Compass + Connectivity & Diagnostics)
+    │   ├── fast_build.ps1                 # Incremental arduino-cli builder with persistent SSD cache & progress bar
+    │   ├── upload_transmitter.bat         # One-click cached compile & upload for Transmitter
+    │   ├── upload_receiver.bat            # One-click cached compile & upload for Receiver
+    │   ├── zig_lora_transmitter/          # Multi-tab Transmitter sketch (imu_math.h, zig_sim_wifi.h, lora_protocol.h)
+    │   └── zig_lora_receiver/             # Multi-tab Receiver sketch (lora_protocol.h, web_server.h, dashboard_html.h)
     ├── test_transmitter/
     │   └── test_transmitter.ino           # 10 Hz "Hello World #<n>" LoRa transmitter test sketch
     └── test_receiver/

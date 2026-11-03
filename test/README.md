@@ -17,12 +17,13 @@ test/
 │   ├── test_zig_iphone.ino    # Connects to iPhone 17 via Wi-Fi UDP ("ZIG SIM") at 60 Hz
 │   └── compass_plotter.html   # 60 Hz Web Serial 2D circular compass
 ├── test_zig_lora_60hz/
-│   ├── README.md              # Guide for end-to-end 60 Hz ZIG SIM -> LoRa TX -> LoRa RX test
-│   ├── compass_plotter.html   # 60 Hz Web Serial 2D circular compass + RSSI/SNR/Rate badges
-│   ├── zig_lora_transmitter/
-│   │   └── zig_lora_transmitter.ino
-│   └── zig_lora_receiver/
-│       └── zig_lora_receiver.ino
+│   ├── README.md              # Guide for end-to-end ZIG SIM -> LoRa TX -> LoRa RX + Wi-Fi Dashboard test
+│   ├── compass_plotter.html   # 2-Tab Webpage (60 fps Compass + Connectivity & Diagnostics)
+│   ├── fast_build.ps1         # Incremental cached compiler & auto-port uploader with progress bar
+│   ├── upload_transmitter.bat # One-click cached build & upload for Transmitter
+│   ├── upload_receiver.bat    # One-click cached build & upload for Receiver
+│   ├── zig_lora_transmitter/  # Multi-tab TX sketch (.ino, imu_math.h, zig_sim_wifi.h, lora_protocol.h)
+│   └── zig_lora_receiver/     # Multi-tab RX sketch (.ino, lora_protocol.h, web_server.h, dashboard_html.h)
 ├── test_transmitter/
 │   └── test_transmitter.ino   # Transmits "Hello World #<n>" every 100 ms (10 Hz)
 ├── test_receiver/
