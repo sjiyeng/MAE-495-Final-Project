@@ -1,0 +1,2 @@
+# Persistent Arduino-CLI build cache
+.build_cache/

@@ -9,10 +9,20 @@ This test verifies the hardware connection, SPI communication, and RF link betwe
 ```text
 test/
 ├── test_ble_iphone/
+│   ├── README.md              # Guide for Bluefruit Connect BLE heading test
 │   ├── test_ble_iphone.ino    # Connects to iPhone 17 via BLE ("Bluefruit Connect") & prints Heading at 20 Hz
 │   └── compass_plotter.html   # Web Serial 2D circular compass with rotating heading arrow
 ├── test_zig_iphone/
-│   └── test_zig_iphone.ino    # Connects to iPhone 17 via Wi-Fi UDP ("ZIG SIM") at 60 Hz
+│   ├── README.md              # Guide for single-board 60 Hz ZIG SIM Wi-Fi UDP heading test
+│   ├── test_zig_iphone.ino    # Connects to iPhone 17 via Wi-Fi UDP ("ZIG SIM") at 60 Hz
+│   └── compass_plotter.html   # 60 Hz Web Serial 2D circular compass
+├── test_zig_lora_60hz/
+│   ├── README.md              # Guide for end-to-end 60 Hz ZIG SIM -> LoRa TX -> LoRa RX test
+│   ├── compass_plotter.html   # 60 Hz Web Serial 2D circular compass + RSSI/SNR/Rate badges
+│   ├── zig_lora_transmitter/
+│   │   └── zig_lora_transmitter.ino
+│   └── zig_lora_receiver/
+│       └── zig_lora_receiver.ino
 ├── test_transmitter/
 │   └── test_transmitter.ino   # Transmits "Hello World #<n>" every 100 ms (10 Hz)
 ├── test_receiver/

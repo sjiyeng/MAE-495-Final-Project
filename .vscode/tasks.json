@@ -1,0 +1,90 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "⚡ Fast Compile: Receiver (60 Hz LoRa + Web Dashboard)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/test/test_zig_lora_60hz/fast_build.ps1",
+        "-Target", "rx"
+      ],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "⚡ Fast Compile: Transmitter (60 Hz ZIG SIM -> LoRa)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/test/test_zig_lora_60hz/fast_build.ps1",
+        "-Target", "tx"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "⚡ Fast Compile: Both TX + RX (Cached)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/test/test_zig_lora_60hz/fast_build.ps1",
+        "-Target", "both"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "🚀 Compile & Upload: Receiver (Auto-Detect COM Port)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/test/test_zig_lora_60hz/fast_build.ps1",
+        "-Target", "rx",
+        "-Upload"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "🚀 Compile & Upload: Transmitter (Auto-Detect COM Port)",
+      "type": "shell",
+      "command": "powershell",
+        "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/test/test_zig_lora_60hz/fast_build.ps1",
+        "-Target", "tx",
+        "-Upload"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    }
+  ]
+}
