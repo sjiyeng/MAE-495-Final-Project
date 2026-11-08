@@ -9,31 +9,39 @@ A long-range 915 MHz LoRa telemetry, **3-hour onboard flash data-logging**, Kalm
 ```text
 495 Final Project/
 ├── README.md                              # Complete system documentation (this file)
+├── fast_build.ps1                         # Incremental builder + HTML->PROGMEM syncer + auto-uploader
+├── upload_transmitter.bat                 # One-click compile & flash for production Transmitter
+├── upload_receiver.bat                    # One-click compile & flash for production Receiver
+├── dashboard/
+│   └── pitwall_dashboard.html             # Self-contained offline Pitwall Web Dashboard (4-Tab UI + Compass)
+├── firmware/
+│   ├── transmitter/                       # Modular Trike Transmitter Firmware (XIAO ESP32S3 + Wio-SX1262)
+│   │   ├── transmitter.ino                # Main orchestrator
+│   │   ├── config.h                       # Pins, RF params & hardware/simulation switches
+│   │   ├── telemetry_types.h              # 36-byte binary LoRa packet & 16-byte LittleFS record structs
+│   │   ├── imu_zig_sim.h                  # 60 Hz iPhone ZIG SIM Wi-Fi UDP & 3D Quaternion orientation lock
+│   │   ├── wheel_sensor.h                 # GPIO 1 Hall ISR + 10s Sinusoidal (0–10 mph) simulator
+│   │   ├── power_ina228.h                 # I2C INA228 driver + 48V 5-min drain & 10s load-sag simulator
+│   │   ├── kalman_nav.h                   # 2D Dead-Reckoning & loop-closure filter
+│   │   ├── flash_logger.h                 # 3-Hour (10,800s) LittleFS binary flash logger (/tx_log.bin)
+│   │   └── lora_tx.h                      # Non-blocking 40 Hz 915 MHz LoRa transmitter
+│   └── receiver/                          # Modular Pitwall Receiver Firmware (XIAO ESP32S3 + Wio-SX1262)
+│       ├── receiver.ino                   # Core 1 LoRa loop & USB Serial command handler
+│       ├── config.h                       # Receiver pins, SoftAP SSID ("ASME-Pitwall-RX") & RF config
+│       ├── telemetry_types.h              # Shared binary packet & ReceiverState definitions
+│       ├── lora_rx.h                      # Core 1 DIO1 interrupt handler, dead-reckoning & <2% loss stats
+│       ├── web_server.h                   # Core 0 Wi-Fi SoftAP & JSON REST API (/state, /zero, /lap, etc.)
+│       └── dashboard_html.h               # Auto-synced PROGMEM wrapper of dashboard/pitwall_dashboard.html
 ├── dashboard_preview/
-│   ├── iphone_dashboard_preview.html      # Standalone interactive iPhone Pitwall UI visualization
-│   └── README.md                          # Guide to the iPhone UI, 4-tab layout, and Safari vs. PWA modes
+│   ├── iphone_dashboard_preview.html      # Original standalone iPhone Pitwall UI prototype
+│   └── README.md                          # Guide to the iPhone UI prototype
 └── test/
     ├── README.md                          # Overview of all hardware, BLE, ZIG SIM, and 60 Hz LoRa tests
     ├── test_ble_iphone/                   # Single-board iPhone 17 BLE ("Bluefruit Connect") heading test
-    │   ├── README.md
-    │   ├── test_ble_iphone.ino
-    │   └── compass_plotter.html
     ├── test_zig_iphone/                   # Single-board 60 Hz iPhone 17 Wi-Fi UDP ("ZIG SIM") heading test
-    │   ├── README.md
-    │   ├── test_zig_iphone.ino
-    │   └── compass_plotter.html
     ├── test_zig_lora_60hz/                # End-to-end iPhone (ZIG SIM) -> LoRa TX -> LoRa RX + 2-Tab Web Dashboard
-    │   ├── README.md                      # Setup, dual-core architecture & fast-build guide
-    │   ├── compass_plotter.html           # 2-Tab Webpage (Compass + Connectivity & Diagnostics)
-    │   ├── fast_build.ps1                 # Incremental arduino-cli builder with persistent SSD cache & progress bar
-    │   ├── upload_transmitter.bat         # One-click cached compile & upload for Transmitter
-    │   ├── upload_receiver.bat            # One-click cached compile & upload for Receiver
-    │   ├── zig_lora_transmitter/          # Multi-tab Transmitter sketch (imu_math.h, zig_sim_wifi.h, lora_protocol.h)
-    │   └── zig_lora_receiver/             # Multi-tab Receiver sketch (lora_protocol.h, web_server.h, dashboard_html.h)
-    ├── test_transmitter/
-    │   └── test_transmitter.ino           # 10 Hz "Hello World #<n>" LoRa transmitter test sketch
-    └── test_receiver/
-        └── test_receiver.ino              # 10 Hz DIO1 interrupt LoRa receiver test sketch (RSSI/SNR/Delta)
+    ├── test_transmitter/                  # 10 Hz "Hello World #<n>" LoRa transmitter test sketch
+    └── test_receiver/                     # 10 Hz DIO1 interrupt LoRa receiver test sketch (RSSI/SNR/Delta)
 ```
 
 ---

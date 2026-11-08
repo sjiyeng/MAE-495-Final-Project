@@ -1,0 +1,2100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="ASME Pit" />
+  <title>ASME e-HPVC Pitwall Telemetry</title>
+  <style>
+    :root {
+      --bg: #0b1118;
+      --card: #121b26;
+      --card-alt: #162130;
+      --secondary: #1e2d3d;
+      --border: #243447;
+      --fg: #f1f5f9;
+      --muted: #94a3b8;
+      --emerald: #10b981;
+      --emerald-bg: rgba(16, 185, 129, 0.15);
+      --emerald-border: rgba(16, 185, 129, 0.35);
+      --amber: #f59e0b;
+      --amber-bg: rgba(245, 158, 11, 0.16);
+      --amber-border: rgba(245, 158, 11, 0.38);
+      --sky: #38bdf8;
+      --sky-bg: rgba(56, 189, 248, 0.16);
+      --sky-border: rgba(56, 189, 248, 0.38);
+      --red: #ef4444;
+      --red-bg: rgba(239, 68, 68, 0.16);
+      --red-border: rgba(239, 68, 68, 0.38);
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--fg);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+      height: 100dvh;
+      width: 100vw;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      user-select: none;
+    }
+
+    .app-shell {
+      width: 393px;
+      height: 852px;
+      max-width: 100vw;
+      max-height: calc(100dvh - 16px);
+      display: flex;
+      flex-direction: column;
+      background: var(--card);
+      border-radius: 40px;
+      border: 6px solid #2b3b4e;
+      box-shadow: 0 24px 60px rgba(0, 0, 0, 0.65);
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    .btn-tool {
+      background: var(--secondary);
+      color: var(--fg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 5px 9px;
+      font-size: 0.74rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-tool:hover { border-color: var(--sky); }
+    .btn-tool.active { background: var(--emerald-bg); color: var(--emerald); border-color: var(--emerald-border); }
+    .btn-tool.warn { background: var(--amber-bg); color: var(--amber); border-color: var(--amber-border); }
+
+    /* Status & Telemetry Link Bar */
+    .status-bar {
+      padding: 8px 14px 6px;
+      background: var(--card-alt);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.75rem;
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+
+    .island-pill {
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.73rem;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      display: inline-block;
+    }
+    .status-dot.ok { background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+    .status-dot.warn { background: var(--amber); box-shadow: 0 0 8px var(--amber); }
+    .status-dot.err { background: var(--red); box-shadow: 0 0 8px var(--red); }
+
+    .badge-mono {
+      font-family: var(--mono);
+      padding: 2px 6px;
+      border-radius: 6px;
+      font-size: 0.72rem;
+      font-weight: 700;
+    }
+    .badge-ok { background: var(--emerald-bg); color: var(--emerald); border: 1px solid var(--emerald-border); }
+    .badge-warn { background: var(--amber-bg); color: var(--amber); border: 1px solid var(--amber-border); }
+    .badge-err { background: var(--red-bg); color: var(--red); border: 1px solid var(--red-border); }
+    .badge-sky { background: var(--sky-bg); color: var(--sky); border: 1px solid var(--sky-border); }
+
+    /* Persistent Race Header */
+    .race-header {
+      padding: 8px 14px;
+      background: var(--card-alt);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+
+    .timer-row {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .timer-digits {
+      font-family: var(--mono);
+      font-size: 1.3rem;
+      font-weight: 900;
+      letter-spacing: -0.02em;
+    }
+
+    .sub-meta {
+      font-family: var(--mono);
+      font-size: 0.73rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .sub-meta strong { color: var(--fg); }
+
+    .driver-box {
+      text-align: right;
+      cursor: pointer;
+    }
+    .driver-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      background: var(--secondary);
+      border: 1px solid var(--border);
+      font-size: 0.75rem;
+      font-weight: 700;
+    }
+
+    /* Main Scrollable Viewport */
+    .tab-viewport {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      min-height: 0;
+    }
+
+    .tab-panel {
+      display: none;
+      flex: 1;
+      flex-direction: column;
+      gap: 9px;
+      min-height: 0;
+    }
+    .tab-panel.active {
+      display: flex;
+    }
+
+    /* Cards & Panels */
+    .panel-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 10px 12px;
+      flex-shrink: 0;
+    }
+
+    .card-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+
+    .card-title {
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--fg);
+    }
+
+    .speed-hero {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .speed-big {
+      font-family: var(--mono);
+      font-size: 2.15rem;
+      font-weight: 900;
+      line-height: 1;
+      color: var(--fg);
+    }
+
+    .speed-unit {
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: var(--muted);
+      margin-left: 4px;
+    }
+
+    .speed-metrics-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      column-gap: 12px;
+      row-gap: 3px;
+      text-align: right;
+      font-family: var(--mono);
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .speed-metrics-grid strong { color: var(--fg); }
+
+    /* Main Screen Battery SoC Strip inside Hero Card */
+    .main-batt-row {
+      margin-top: 8px;
+      padding-top: 7px;
+      border-top: 1px solid rgba(36, 52, 71, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-family: var(--mono);
+      font-size: 0.74rem;
+    }
+    .main-batt-bar-wrap {
+      flex: 1;
+      height: 7px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .main-batt-bar-fill {
+      height: 100%;
+      width: 100%;
+      background: var(--emerald);
+      transition: width 0.15s linear;
+    }
+
+    .progress-track {
+      width: 100%;
+      height: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, #38bdf8, #10b981);
+      transition: width 0.08s linear;
+    }
+
+    /* Map Card */
+    .map-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      overflow: hidden;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 195px;
+    }
+
+    .map-top-bar {
+      padding: 7px 11px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .map-canvas-wrap {
+      position: relative;
+      flex: 1;
+      background: #101c16;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 160px;
+    }
+
+    canvas#trackCanvas {
+      width: 100%;
+      height: 100%;
+      display: block;
+      cursor: crosshair;
+    }
+
+    .toast-banner {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      right: 8px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #059669;
+      color: #fff;
+      font-size: 0.74rem;
+      font-weight: 700;
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    }
+    .toast-banner.show { display: flex; }
+
+    .map-overlay-pill {
+      position: absolute;
+      bottom: 7px;
+      left: 8px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(11, 17, 24, 0.82);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+    }
+
+    .map-scale-pill {
+      position: absolute;
+      bottom: 7px;
+      right: 8px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(11, 17, 24, 0.82);
+      border: 1px solid var(--border);
+      color: var(--sky);
+      font-family: var(--mono);
+      font-size: 0.7rem;
+    }
+
+    .map-footer-bar {
+      padding: 6px 11px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 8px;
+      font-size: 0.72rem;
+      flex-shrink: 0;
+    }
+    .map-footer-bar label {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      cursor: pointer;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    /* Thumb-Zone Action Buttons */
+    .action-dock {
+      display: grid;
+      grid-template-columns: repeat(12, 1fr);
+      gap: 7px;
+      flex-shrink: 0;
+    }
+
+    .btn-lap {
+      grid-column: span 6;
+      padding: 10px 8px;
+      border-radius: 14px;
+      background: #059669;
+      border: 1px solid #10b981;
+      color: #ffffff;
+      font-weight: 900;
+      font-size: 0.88rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      transition: transform 0.1s ease, background 0.15s ease;
+    }
+    .btn-lap:hover { background: #10b981; }
+    .btn-lap:active { transform: scale(0.98); }
+    .btn-lap small { font-size: 0.68rem; font-weight: 500; opacity: 0.9; margin-top: 1px; }
+
+    .btn-pit {
+      grid-column: span 3;
+      padding: 10px 4px;
+      border-radius: 14px;
+      background: var(--amber-bg);
+      border: 1px solid var(--amber-border);
+      color: var(--amber);
+      font-weight: 800;
+      font-size: 0.74rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .btn-pit:active { transform: scale(0.98); }
+
+    .btn-deliv {
+      grid-column: span 3;
+      padding: 10px 4px;
+      border-radius: 14px;
+      background: var(--sky-bg);
+      border: 1px solid var(--sky-border);
+      color: var(--sky);
+      font-weight: 800;
+      font-size: 0.74rem;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 2px;
+    }
+    .btn-deliv:active { transform: scale(0.98); }
+
+    /* Grid Helpers */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+
+    .stat-box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      padding: 7px 9px;
+      font-family: var(--mono);
+    }
+    .stat-label { font-size: 0.69rem; color: var(--muted); font-family: -apple-system, sans-serif; }
+    .stat-value { font-size: 0.95rem; font-weight: 800; color: var(--fg); margin-top: 2px; }
+
+    /* Driver Chips & Inputs */
+    .chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin: 7px 0;
+    }
+    .chip-btn {
+      padding: 5px 10px;
+      border-radius: 8px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-size: 0.75rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .chip-btn:hover { border-color: var(--emerald); }
+
+    .input-row {
+      display: flex;
+      gap: 7px;
+      align-items: center;
+    }
+    .text-input {
+      flex: 1;
+      min-width: 0;
+      padding: 6px 10px;
+      border-radius: 9px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      color: var(--fg);
+      font-size: 0.78rem;
+      font-weight: 600;
+    }
+    .btn-primary {
+      padding: 6px 12px;
+      border-radius: 9px;
+      background: #059669;
+      border: 1px solid #10b981;
+      color: #fff;
+      font-size: 0.76rem;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    /* Event Log Table */
+    .table-scroll {
+      overflow-y: auto;
+      flex: 1;
+      min-height: 140px;
+    }
+    table.event-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+      text-align: left;
+    }
+    table.event-table th {
+      padding: 5px 4px;
+      border-bottom: 1px solid var(--border);
+      color: var(--muted);
+      font-weight: 700;
+    }
+    table.event-table td {
+      padding: 6px 4px;
+      border-bottom: 1px solid rgba(36, 52, 71, 0.5);
+      font-family: var(--mono);
+    }
+
+    /* Orientation Dial & Sensor Canvas */
+    .compass-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    canvas#compassCanvas {
+      background: #080d14;
+      border: 2px solid var(--border);
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    canvas#waveCanvas {
+      width: 100%;
+      height: 68px;
+      background: #080d14;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: block;
+      margin-top: 7px;
+    }
+
+    /* Pipeline Diagnostics */
+    .pipe-node {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 7px 4px;
+      text-align: center;
+      font-size: 0.7rem;
+    }
+    .pipe-node.ok { border-color: var(--emerald); }
+    .pipe-node.warn { border-color: var(--amber); }
+    .pipe-node.err { border-color: var(--red); }
+    .pipe-title { font-weight: 700; color: var(--fg); margin-bottom: 2px; }
+    .pipe-sub { font-size: 0.66rem; color: var(--muted); font-family: var(--mono); }
+
+    .diag-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 4px 0;
+      border-bottom: 1px solid rgba(36, 52, 71, 0.45);
+      font-size: 0.75rem;
+    }
+    .diag-row:last-child { border-bottom: none; }
+
+    /* Bottom Navigation Bar */
+    .bottom-nav {
+      padding: 6px 8px 10px;
+      background: var(--card-alt);
+      border-top: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 5px;
+      flex-shrink: 0;
+    }
+    .nav-tab {
+      padding: 6px 4px;
+      border-radius: 11px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 600;
+      cursor: pointer;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      transition: all 0.15s ease;
+    }
+    .nav-tab.active {
+      background: var(--bg);
+      color: var(--fg);
+      font-weight: 800;
+      border-color: var(--border);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Main Pitwall App Container (iPhone Fullscreen) -->
+  <div class="app-shell">
+
+    <!-- 1. Top Link & Signal Bar -->
+    <div class="status-bar">
+      <span id="clockDisplay">9:41</span>
+      <div class="island-pill">
+        <span id="topLinkDot" class="status-dot err"></span>
+        <span id="topLinkLabel">NO LORA LINK</span>
+        <span style="color: var(--muted);">•</span>
+        <span id="topRssiLabel" style="font-family: var(--mono); color: var(--emerald);">--dBm</span>
+      </div>
+      <span id="topLossBadge" class="badge-mono badge-ok">0.0% Loss</span>
+    </div>
+
+    <!-- 2. Persistent Master Race Header -->
+    <div class="race-header">
+      <div>
+        <div class="timer-row">
+          <span id="raceTimerDisplay" class="timer-digits">00:00:00</span>
+          <button id="timerToggleBtn" onclick="toggleRaceTimer()" class="badge-mono badge-ok" style="cursor:pointer; padding:4px 10px; font-size:0.76rem;">
+            ▶ START
+          </button>
+        </div>
+        <div class="sub-meta">
+          Lap <strong id="headerLapNum">1</strong> • Split <strong id="headerLapSplit">00:00.0</strong>
+        </div>
+      </div>
+
+      <div class="driver-box" onclick="switchTab('laps')">
+        <div class="driver-pill">
+          <span>🏎️</span>
+          <span id="headerActiveDriver">Srinivas</span>
+        </div>
+        <div class="sub-meta">
+          Next: <strong id="headerNextDriver">Justin</strong> ›
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. Tab Content Viewport -->
+    <div class="tab-viewport">
+
+      <!-- ========================================================= -->
+      <!-- TAB 1: RACE, BATTERY SoC & TRACK MAP                      -->
+      <!-- ========================================================= -->
+      <div id="tab-race" class="tab-panel active">
+
+        <!-- Hero Wheel Speed (4-12 mph Sinusoid) + Main Battery SoC Card -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">Wheel Speed</span>
+            <span id="speedModeBadge" class="badge-mono badge-sky">4–12 MPH SINUSOID</span>
+          </div>
+          <div class="speed-hero">
+            <div>
+              <span id="speedMphDisplay" class="speed-big">0.0</span>
+              <span class="speed-unit">MPH</span>
+            </div>
+            <div class="speed-metrics-grid">
+              <div>FT/S: <strong id="speedFtsDisplay">0.0</strong></div>
+              <div>RPM: <strong id="wheelRpmDisplay">0</strong></div>
+              <div>DIST: <strong id="totalDistDisplay">0.00mi</strong></div>
+              <div>LAP: <strong id="lapDistDisplay">0ft</strong></div>
+            </div>
+          </div>
+          <div class="progress-track">
+            <div id="speedBarFill" class="progress-fill" style="width: 0%;"></div>
+          </div>
+
+          <!-- Battery SoC & Voltage directly on the Main Screen -->
+          <div class="main-batt-row">
+            <span style="color:var(--muted); font-weight:700;">🔋 BATTERY</span>
+            <div class="main-batt-bar-wrap">
+              <div id="mainBattBar" class="main-batt-bar-fill" style="width: 100%;"></div>
+            </div>
+            <span>
+              <strong id="mainBattSoc" style="color:var(--emerald);">100%</strong>
+              <span style="color:var(--muted);">•</span>
+              <span id="mainBattVolt" style="color:var(--fg);">54.6V</span>
+            </span>
+          </div>
+        </div>
+
+        <!-- Live Dead-Reckoning Track Map + Reference Course Overlay -->
+        <div class="map-card">
+          <div class="map-top-bar">
+            <div class="card-title">Track Map</div>
+            <div class="toolbar-group">
+              <button id="dropPinBtn" onclick="toggleDropPinMode()" class="btn-tool warn">
+                📍 Drop Pin
+              </button>
+              <button onclick="snapPinToTrike()" class="btn-tool" title="Set Start Pin at current location">
+                Here (0,0)
+              </button>
+              <button onclick="clearDeadReckoningTrail()" class="btn-tool" title="Clear trail history">
+                Clear
+              </button>
+            </div>
+          </div>
+
+          <div class="map-canvas-wrap">
+            <canvas id="trackCanvas" width="410" height="240"></canvas>
+
+            <div id="loopClosureToast" class="toast-banner">
+              <span>✓ Snapped to Start Pin (0,0)</span>
+            </div>
+
+            <div id="lastEventOverlay" class="map-overlay-pill">
+              Press ▶ START to begin
+            </div>
+
+            <div id="mapScaleOverlay" class="map-scale-pill">
+              Grid: 25 ft
+            </div>
+          </div>
+
+          <div class="map-footer-bar">
+            <label>
+              <input type="checkbox" id="showTrailToggle" checked onchange="drawTrackMap()" />
+              <span>Fused Trail</span>
+            </label>
+            <label>
+              <input type="checkbox" id="showRefTrackToggle" checked onchange="drawTrackMap()" />
+              <span>Ref Course</span>
+            </label>
+            <label>
+              <input type="checkbox" id="autoZoomToggle" checked onchange="drawTrackMap()" />
+              <span>Auto-Zoom</span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Giant Thumb-Zone Action Buttons -->
+        <div class="action-dock">
+          <button class="btn-lap" onclick="recordLap()">
+            <span>🏁 LAP</span>
+            <small>Snap to Start Pin (0,0)</small>
+          </button>
+          <button class="btn-pit" onclick="recordPitStop()">
+            <span style="font-size:1rem;">🔧</span>
+            <span>PIT STOP</span>
+          </button>
+          <button class="btn-deliv" onclick="recordDelivery()">
+            <span style="font-size:1rem;">📦</span>
+            <span>DELIVERY</span>
+          </button>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 2: LAPS, PIT STOPS & DRIVER QUEUE                     -->
+      <!-- ========================================================= -->
+      <div id="tab-laps" class="tab-panel">
+
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">Driver Change Queue</span>
+            <span class="sub-meta">Auto-swaps on Pit Stop</span>
+          </div>
+          <div class="chip-row">
+            <button class="chip-btn" onclick="selectQuickDriver('Srinivas')">Srinivas</button>
+            <button class="chip-btn" onclick="selectQuickDriver('Justin')">Justin</button>
+            <button class="chip-btn" onclick="selectQuickDriver('Alex')">Alex</button>
+            <button class="chip-btn" onclick="selectQuickDriver('Maya')">Maya</button>
+          </div>
+          <div class="input-row">
+            <input id="nextDriverInput" type="text" value="Justin" placeholder="Custom driver name..." class="text-input" />
+            <button class="btn-primary" onclick="queueNextDriver()">Set Next</button>
+          </div>
+        </div>
+
+        <div class="grid-3">
+          <div class="stat-box" style="text-align:center;">
+            <div class="stat-label">Completed</div>
+            <div id="statTotalLaps" class="stat-value">0 Laps</div>
+          </div>
+          <div class="stat-box" style="text-align:center;">
+            <div class="stat-label">Best Split</div>
+            <div id="statBestLap" class="stat-value" style="color:var(--emerald);">--:--.-</div>
+          </div>
+          <div class="stat-box" style="text-align:center;">
+            <div class="stat-label">Pit / Deliv</div>
+            <div id="statMarkersCount" class="stat-value">0 / 0</div>
+          </div>
+        </div>
+
+        <div class="panel-card" style="flex:1; display:flex; flex-direction:column; min-height:0;">
+          <div class="card-header-row">
+            <span class="card-title">Race Event Log</span>
+            <div class="toolbar-group">
+              <button class="btn-tool" onclick="resetRaceTimer()">Reset Timer</button>
+              <button class="btn-tool" onclick="clearRaceEvents()">Clear Log</button>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="event-table">
+              <thead>
+                <tr>
+                  <th>Event</th>
+                  <th>Driver</th>
+                  <th>Split / Detail</th>
+                  <th style="text-align:right;">Race Time</th>
+                </tr>
+              </thead>
+              <tbody id="eventLogTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 3: SENSORS (RELATIVE POSE DIAL, 48V BATTERY, WHEEL)   -->
+      <!-- ========================================================= -->
+      <div id="tab-sensors" class="tab-panel">
+
+        <!-- Relative Orientation Dial (Off Initial/Zeroed Pose) + Trike IMU -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">Phone IMU (Relative to Initial Pose)</span>
+            <div class="toolbar-group">
+              <button class="btn-tool" onclick="sendHardwareCommand('z')">🎯 Zero Pose (0°)</button>
+            </div>
+          </div>
+
+          <div class="compass-wrap">
+            <canvas id="compassCanvas" width="136" height="136"></canvas>
+            <div class="grid-2" style="flex:1;">
+              <div class="stat-box">
+                <div class="stat-label">Rel Yaw (0°=Fwd)</div>
+                <div id="imuYawDisplay" class="stat-value" style="color:var(--sky);">0.0° FWD</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Cornering G</div>
+                <div id="imuGDisplay" class="stat-value" style="color:var(--emerald);">0.00 G</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Roll (Lean)</div>
+                <div id="imuRollDisplay" class="stat-value">+0.0°</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-label">Pitch (Slope)</div>
+                <div id="imuPitchDisplay" class="stat-value">+0.0°</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 48V Nominal INA228 Battery Telemetry + Live Sinusoidal Waveform -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">INA228 48V Battery Telemetry</span>
+            <span id="battSocBadge" class="badge-mono badge-ok">100.0% SoC</span>
+          </div>
+
+          <div class="progress-track" style="margin-bottom: 8px;">
+            <div id="battSocBar" class="progress-fill" style="width: 100%; background: var(--emerald);"></div>
+          </div>
+
+          <div class="grid-4">
+            <div class="stat-box">
+              <div class="stat-label">Voltage</div>
+              <div id="battVoltDisplay" class="stat-value">54.60 V</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Current</div>
+              <div id="battCurrDisplay" class="stat-value">0.00 A</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Power</div>
+              <div id="battPowerDisplay" class="stat-value">0 W</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Energy</div>
+              <div id="battEnergyDisplay" class="stat-value">0.0 Wh</div>
+            </div>
+          </div>
+
+          <!-- Live 30s Waveform Strip: Speed (Sky) & Current/Drain (Emerald) -->
+          <canvas id="waveCanvas" width="400" height="68"></canvas>
+          <div class="sub-meta" style="display:flex; justify-content:space-between; margin-top:4px;">
+            <span style="color:var(--sky);">━ Speed (4–12 mph, 10s wave)</span>
+            <span style="color:var(--emerald);">━ Load Current (1–12 A) & 48V Drain</span>
+          </div>
+        </div>
+
+        <!-- Wheel Diameter Input Card -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">Wheel Calibration</span>
+            <span class="sub-meta">1 Pulse / Rev</span>
+          </div>
+          <div class="input-row" style="justify-content:space-between;">
+            <span style="font-size:0.78rem; color:var(--muted);">Wheel Diameter (in):</span>
+            <div class="toolbar-group">
+              <input id="wheelDiaInput" type="number" step="0.1" min="5" max="40" value="20.0" class="text-input" style="width:78px; text-align:right; font-family:var(--mono);" />
+              <button class="btn-primary" onclick="applyWheelDiameter()">Apply</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ========================================================= -->
+      <!-- TAB 4: 4-STAGE LINK DIAGNOSTICS & 3-HR FLASH CSV DUMP     -->
+      <!-- ========================================================= -->
+      <div id="tab-data" class="tab-panel">
+
+        <!-- 4-Stage End-to-End Pipeline -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">End-to-End Telemetry Pipeline</span>
+            <span id="connSourceBadge" class="badge-mono badge-sky">Wi-Fi (192.168.4.1)</span>
+          </div>
+          <div class="grid-4" style="margin-bottom:8px;">
+            <div id="pipePhone" class="pipe-node">
+              <div class="pipe-title">📱 iPhone</div>
+              <div id="pipePhoneSub" class="pipe-sub">Waiting</div>
+            </div>
+            <div id="pipeZig" class="pipe-node">
+              <div class="pipe-title">📤 ZIG UDP</div>
+              <div id="pipeZigSub" class="pipe-sub">0 Hz</div>
+            </div>
+            <div id="pipeLora" class="pipe-node">
+              <div class="pipe-title">📻 915 MHz</div>
+              <div id="pipeLoraSub" class="pipe-sub">Waiting</div>
+            </div>
+            <div id="pipeRx" class="pipe-node ok">
+              <div class="pipe-title">📥 Pit UI</div>
+              <div id="pipeRxSub" class="pipe-sub">Active</div>
+            </div>
+          </div>
+
+          <div class="diag-row">
+            <span style="color:var(--muted);">iPhone Wi-Fi (`ASME-Trike-TX`)</span>
+            <span id="diagPhoneWifi" style="font-family:var(--mono); font-weight:700;">-- dBm</span>
+          </div>
+          <div class="diag-row">
+            <span style="color:var(--muted);">ZIG SIM Quaternion Stream</span>
+            <span id="diagZigRate" style="font-family:var(--mono); font-weight:700;">0 Hz</span>
+          </div>
+          <div class="diag-row">
+            <span style="color:var(--muted);">LoRa 915 MHz Signal (RSSI / SNR)</span>
+            <span id="diagLoraSignal" style="font-family:var(--mono); font-weight:700;">-- dBm / -- dB</span>
+          </div>
+          <div class="diag-row">
+            <span style="color:var(--muted);">LoRa Packet Rate / Age</span>
+            <span id="diagLoraRate" style="font-family:var(--mono); font-weight:700;">0 Hz (-- ms)</span>
+          </div>
+        </div>
+
+        <!-- Packet Loss Deliverable Card (< 2.0% Target) -->
+        <div class="panel-card">
+          <div class="card-header-row">
+            <span class="card-title">Packet Loss Analyzer (&lt;2% Target)</span>
+            <button class="btn-tool" onclick="sendHardwareCommand('r')">🔄 Reset Loss</button>
+          </div>
+          <div class="grid-3">
+            <div class="stat-box">
+              <div class="stat-label">TX Sent</div>
+              <div id="diagTxCount" class="stat-value">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">RX Received</div>
+              <div id="diagRxCount" class="stat-value">0</div>
+            </div>
+            <div class="stat-box">
+              <div class="stat-label">Lost (%)</div>
+              <div id="diagLostCount" class="stat-value" style="color:var(--emerald);">0 (0.00%)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2.5-Hour 60 Hz Local RAM Logger & Instant CSV Export -->
+        <div class="panel-card" style="flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+          <div>
+            <div class="card-header-row">
+              <span class="card-title">2.5-Hr 60Hz RAM Log &amp; CSV Export</span>
+              <span id="txFlashBadge" class="badge-mono badge-ok">0 / 540,000</span>
+            </div>
+            <p class="sub-meta" style="line-height:1.35;">
+              Pre-allocated <strong>60 Hz</strong> RAM buffers for a full <strong>2.5-hr race (540,000 samples)</strong>: <span id="ramVerifyBadge" style="color:var(--emerald); font-weight:700;">34.0 MB Local RAM + 6.18 MB ESP32 PSRAM Verified</span> (<strong id="browserLogCount">0 samples @ 60Hz</strong>).
+            </p>
+          </div>
+
+          <div style="margin: 8px 0;">
+            <div class="card-header-row" style="font-family:var(--mono); font-size:0.72rem;">
+              <span id="dumpStatusLabel">60 Hz RAM Buffer Ready (540,000 sample capacity)</span>
+              <span id="dumpPercentLabel">0%</span>
+            </div>
+            <div class="progress-track">
+              <div id="dumpProgressBar" class="progress-fill" style="width: 0%;"></div>
+            </div>
+          </div>
+
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button class="btn-primary" style="width:100%; padding:9px;" onclick="startLoraFlashOffload()">
+              📡 Sync ESP32 60Hz PSRAM Buffer Status
+            </button>
+            <div class="grid-2">
+              <button class="btn-tool" style="justify-content:center; padding:8px;" onclick="downloadTelemetryCsv()">
+                ⬇️ 60Hz Telemetry (.CSV)
+              </button>
+              <button class="btn-tool" style="justify-content:center; padding:8px;" onclick="downloadRaceEventsCsv()">
+                ⬇️ Race Events (.CSV)
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- 4. Bottom Tab Bar -->
+    <div class="bottom-nav">
+      <button id="nav-race" class="nav-tab active" onclick="switchTab('race')">
+        <span style="font-size:1rem;">🏁</span>
+        <span>Race & Map</span>
+      </button>
+      <button id="nav-laps" class="nav-tab" onclick="switchTab('laps')">
+        <span style="font-size:1rem;">⏱️</span>
+        <span>Laps & Pit</span>
+      </button>
+      <button id="nav-sensors" class="nav-tab" onclick="switchTab('sensors')">
+        <span style="font-size:1rem;">🧭</span>
+        <span>Sensors</span>
+      </button>
+      <button id="nav-data" class="nav-tab" onclick="switchTab('data')">
+        <span style="font-size:1rem;">📡</span>
+        <span>Link & Data</span>
+      </button>
+    </div>
+
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. UI TAB MANAGEMENT
+    // =========================================================================
+    const TABS = ['race', 'laps', 'sensors', 'data'];
+    let activeTab = 'race';
+
+    function switchTab(tabId) {
+      activeTab = tabId;
+      TABS.forEach(t => {
+        document.getElementById(`tab-${t}`).classList.toggle('active', t === tabId);
+        document.getElementById(`nav-${t}`).classList.toggle('active', t === tabId);
+      });
+      if (tabId === 'race') drawTrackMap();
+      if (tabId === 'sensors') {
+        drawOrientationDial();
+        drawWaveformStrip();
+      }
+    }
+
+    function updateClock() {
+      const d = new Date();
+      const hh = d.getHours() % 12 || 12;
+      const mm = String(d.getMinutes()).padStart(2, '0');
+      document.getElementById('clockDisplay').textContent = `${hh}:${mm}`;
+    }
+    setInterval(updateClock, 10000);
+    updateClock();
+
+    // =========================================================================
+    // 2. TELEMETRY & RACE MANAGEMENT STATE
+    // =========================================================================
+    const state = {
+      heading: 0.0, // Relative yaw in degrees (0° = Initial/Zeroed Forward Pose)
+      roll: 0.0,
+      pitch: 0.0,
+      lateralG: 0.0,
+
+      // Speed & Distance (4-12 mph 10s Sinusoid on Transmitter when running)
+      speedMph: 0.0,
+      speedFts: 0.0,
+      wheelRpm: 0.0,
+      totalDistFt: 0.0,
+      lapDistFt: 0.0,
+      wheelDiaIn: 20.0,
+
+      // 2D Dead-Reckoning Position (ft from Start Pin)
+      posXFt: 0.0,
+      posYFt: 0.0,
+      uncertaintyFt: 1.5,
+
+      // 48V Nominal Battery Pack (54.6V -> 42.0V)
+      voltageV: 54.60,
+      currentA: 0.00,
+      powerW: 0.0,
+      energyWh: 0.0,
+      socPct: 100.0,
+
+      // Hardware Flags & Link Diagnostics (with 3.5s holdover to prevent 1Hz orange flash)
+      phoneConnected: false,
+      zigStreaming: false,
+      lastZigGoodMs: 0,
+      lastZigHzGood: 0,
+      hasQuat: false,
+      simSpeed: true,
+      simBattery: true,
+      txFlashRecords: 0,
+      hwRamCapacity: 540000,
+      hwFreePsramKb: 1860,
+      hwFreeSramKb: 285,
+      zigHz: 0,
+      phoneRssi: -127,
+      loraOnline: false,
+      loraRssi: -58.0,
+      loraSnr: 10.5,
+      loraRxHz: 0,
+      seq: 0,
+      totalRx: 0,
+      lostPackets: 0,
+      lastRxAgeMs: 99999
+    };
+
+    // Race Timer, Drivers & Event Log (Starts PAUSED on boot!)
+    let raceSeconds = 0.0;
+    let currentLapSec = 0.0;
+    let timerRunning = false;
+    let currentLap = 1;
+    let bestLapSec = null;
+    let activeDriver = 'Srinivas';
+    let queuedDriver = 'Justin';
+    let pitStopCount = 0;
+    let deliveryCount = 0;
+
+    const raceEvents = [];
+    const waveHistory = [];
+
+    // =========================================================================
+    // PRE-ALLOCATED 60 HZ LOCAL RAM BUFFER FOR 2.5-HOUR RACE (540,000 SAMPLES)
+    //   2.5 hours = 9,000 seconds * 60 Hz = 540,000 samples
+    //   16 Float32 channels/sample = 64 B/sample -> 34,560,000 B (32.96 MB)
+    //   + 2 Uint8 channels (driver ID & lap #)   ->  1,080,000 B ( 1.03 MB)
+    //   Total Pre-Allocated Contiguous Browser RAM: 35,640,000 B (33.99 MB)
+    //   Zero dynamic allocations or GC pauses during the entire 2.5-hour race!
+    // =========================================================================
+    const MAX_LOG_SAMPLES_60HZ = 540000; // 2.5 hours * 3600 s/hr * 60 Hz
+    const LOG_FLOATS_STRIDE    = 16;
+    const DRIVER_TABLE         = ['Srinivas', 'Justin', 'Alex', 'Maya'];
+    let localRamFloats60Hz     = null;
+    let localRamDriverIdx60Hz  = null;
+    let localRamLap60Hz        = null;
+    let localRamSampleCount    = 0;
+    let localRamAllocatedMb    = 0.0;
+
+    try {
+      localRamFloats60Hz    = new Float32Array(MAX_LOG_SAMPLES_60HZ * LOG_FLOATS_STRIDE);
+      localRamDriverIdx60Hz = new Uint8Array(MAX_LOG_SAMPLES_60HZ);
+      localRamLap60Hz       = new Uint8Array(MAX_LOG_SAMPLES_60HZ);
+      // Touch pages across the ArrayBuffer at boot to guarantee OS physical RAM backing
+      for (let i = 0; i < localRamFloats60Hz.length; i += 4096) {
+        localRamFloats60Hz[i] = 0.0;
+      }
+      localRamAllocatedMb = (
+        localRamFloats60Hz.byteLength +
+        localRamDriverIdx60Hz.byteLength +
+        localRamLap60Hz.byteLength
+      ) / (1024 * 1024);
+    } catch (allocErr) {
+      console.error('60Hz RAM allocation error:', allocErr);
+    }
+
+    function getDriverTableIndex(name) {
+      let idx = DRIVER_TABLE.indexOf(name);
+      if (idx === -1) {
+        DRIVER_TABLE.push(name);
+        idx = DRIVER_TABLE.length - 1;
+      }
+      return idx & 0xFF;
+    }
+
+    function appendLocalRamSample60Hz() {
+      if (!localRamFloats60Hz || localRamSampleCount >= MAX_LOG_SAMPLES_60HZ) return;
+      const i = localRamSampleCount;
+      const base = i * LOG_FLOATS_STRIDE;
+
+      localRamFloats60Hz[base + 0]  = raceSeconds;
+      localRamFloats60Hz[base + 1]  = state.speedMph;
+      localRamFloats60Hz[base + 2]  = state.wheelRpm;
+      localRamFloats60Hz[base + 3]  = state.totalDistFt;
+      localRamFloats60Hz[base + 4]  = state.lapDistFt;
+      localRamFloats60Hz[base + 5]  = state.heading;
+      localRamFloats60Hz[base + 6]  = state.roll;
+      localRamFloats60Hz[base + 7]  = state.pitch;
+      localRamFloats60Hz[base + 8]  = state.lateralG;
+      localRamFloats60Hz[base + 9]  = state.posXFt;
+      localRamFloats60Hz[base + 10] = state.posYFt;
+      localRamFloats60Hz[base + 11] = state.voltageV;
+      localRamFloats60Hz[base + 12] = state.currentA;
+      localRamFloats60Hz[base + 13] = state.powerW;
+      localRamFloats60Hz[base + 14] = state.energyWh;
+      localRamFloats60Hz[base + 15] = state.socPct;
+
+      localRamDriverIdx60Hz[i] = getDriverTableIndex(activeDriver);
+      localRamLap60Hz[i]       = Math.min(255, currentLap);
+      localRamSampleCount++;
+    }
+
+    // Dead-Reckoning Trail History (in feet)
+    const trailPoints = [{ x: 0, y: 0, speed: 0 }];
+    let startPinOffset = { x: 0, y: 0 };
+    let dropPinMode = false;
+
+    const refCourseWaypointsFt = [
+      { x: 0,    y: 0   },
+      { x: 110,  y: 5   },
+      { x: 155,  y: 35  },
+      { x: 165,  y: 95  },
+      { x: 115,  y: 125 },
+      { x: 65,   y: 98  },
+      { x: 32,   y: 145 },
+      { x: 75,   y: 190 },
+      { x: -45,  y: 198 },
+      { x: -130, y: 180 },
+      { x: -158, y: 125 },
+      { x: -115, y: 78  },
+      { x: -150, y: 22  },
+      { x: -75,  y: 0   }
+    ];
+
+    let lastLocalTickMs = Date.now();
+    const WIFI_BASE = (window.location.hostname === '192.168.4.1') ? '' : 'http://192.168.4.1';
+    let webZeroSeq  = 0;
+    let webResetSeq = 0;
+    let webLapSeq   = 0;
+
+    // =========================================================================
+    // 3. WI-FI REST COMMANDS & POLLING (http://192.168.4.1/state)
+    // =========================================================================
+    async function sendHardwareCommand(cmd) {
+      if (cmd === 'z') {
+        webZeroSeq = (webZeroSeq + 1) & 0xFF;
+        if (webZeroSeq === 0) webZeroSeq = 1;
+        state.heading = 0.0;
+      } else if (cmd === 'r') {
+        state.totalRx = 0;
+        state.lostPackets = 0;
+      } else if (cmd === 'l') {
+        webLapSeq = (webLapSeq + 1) & 0xFF;
+        if (webLapSeq === 0) webLapSeq = 1;
+        state.posXFt = 0.0;
+        state.posYFt = 0.0;
+        state.lapDistFt = 0.0;
+        state.uncertaintyFt = 1.5;
+      } else if (cmd === 't') {
+        webResetSeq = (webResetSeq + 1) & 0xFF;
+        if (webResetSeq === 0) webResetSeq = 1;
+      } else if (cmd === 'q') {
+        state.speedMph = 0.0;
+        state.speedFts = 0.0;
+        state.wheelRpm = 0.0;
+        state.currentA = 0.0;
+        state.powerW   = 0.0;
+      }
+
+      try {
+        const routeMap = {
+          z: '/zero',
+          c: '/reset',
+          r: '/clear_stats',
+          l: '/lap',
+          p: '/timer?run=1',
+          q: '/timer?run=0',
+          t: '/timer?reset=1'
+        };
+        const path = routeMap[cmd] || '/reset';
+        await fetch(WIFI_BASE + path, { mode: 'cors' });
+      } catch (e) {}
+    }
+
+    async function applyWheelDiameter() {
+      const val = parseFloat(document.getElementById('wheelDiaInput').value);
+      if (isNaN(val) || val < 5 || val > 40) return;
+      state.wheelDiaIn = val;
+      try {
+        await fetch(`${WIFI_BASE}/config?wheel_dia=${val.toFixed(1)}`, { mode: 'cors' });
+      } catch (e) {}
+    }
+
+    async function pollWifiStateLoop() {
+      while (true) {
+        try {
+          const controller = new AbortController();
+          const timer = setTimeout(() => controller.abort(), 450);
+          const runParam = timerRunning ? '1' : '0';
+          const res = await fetch(`${WIFI_BASE}/state?run=${runParam}&zseq=${webZeroSeq}&rseq=${webResetSeq}&lseq=${webLapSeq}`, { signal: controller.signal, cache: 'no-store' });
+          clearTimeout(timer);
+
+          if (res.ok) {
+            const d = await res.json();
+            const nowMs = Date.now();
+
+            state.heading        = d.h ?? state.heading;
+            state.roll           = d.r ?? 0;
+            state.pitch          = d.p ?? 0;
+            state.lateralG       = timerRunning ? (d.g ?? 0) : 0;
+            state.speedMph       = timerRunning ? (d.spd ?? 0) : 0;
+            state.speedFts       = timerRunning ? (d.fts ?? (state.speedMph * 1.46667)) : 0;
+            state.wheelRpm       = timerRunning ? (d.rpm ?? 0) : 0;
+            state.totalDistFt    = d.dist ?? state.totalDistFt;
+            state.lapDistFt      = d.ldist ?? state.lapDistFt;
+            state.posXFt         = d.x ?? state.posXFt;
+            state.posYFt         = d.y ?? state.posYFt;
+            state.uncertaintyFt  = d.err ?? 1.5;
+            state.voltageV       = d.v ?? 54.6;
+            state.currentA       = timerRunning ? (d.a ?? 0.0) : 0.0;
+            state.powerW         = timerRunning ? (d.w ?? (state.voltageV * state.currentA)) : 0.0;
+            state.energyWh       = d.wh ?? state.energyWh;
+            state.socPct         = d.soc ?? state.socPct;
+            state.phoneConnected = !!d.pc;
+            state.hasQuat        = !!d.hq;
+            state.simSpeed       = (d.ss !== undefined) ? !!d.ss : true;
+            state.simBattery     = (d.sb !== undefined) ? !!d.sb : true;
+            state.txFlashRecords = d.trec ?? 0;
+            state.hwRamCapacity  = d.rcap ?? 540000;
+            state.hwFreePsramKb  = d.pram ?? 1860;
+            state.hwFreeSramKb   = d.sram ?? 285;
+            state.phoneRssi      = d.prssi ?? -127;
+            state.loraRssi       = d.rssi ?? -127;
+            state.loraSnr        = d.snr ?? 0;
+            state.loraRxHz       = d.lhz ?? 0;
+            state.seq            = d.seq ?? 0;
+            state.totalRx        = d.rx ?? 0;
+            state.lostPackets    = d.lost ?? 0;
+            state.lastRxAgeMs    = d.age ?? 99999;
+            state.loraOnline     = (state.lastRxAgeMs < 2000) && (state.totalRx > 0);
+
+            // 3.5-second holdover on ZIG SIM UDP streaming so 1Hz counter resets never flash orange
+            if (d.zs || (d.zhz && d.zhz > 0)) {
+              state.lastZigGoodMs = nowMs;
+              if (d.zhz > 0) state.lastZigHzGood = d.zhz;
+            }
+            const zigRecentlyGood = (state.lastZigGoodMs > 0) && ((nowMs - state.lastZigGoodMs) <= 3500);
+            state.zigStreaming = !!d.zs || zigRecentlyGood;
+            state.zigHz = (d.zhz && d.zhz > 0) ? d.zhz : (state.zigStreaming ? state.lastZigHzGood : 0);
+
+            if (timerRunning && state.loraOnline) {
+              appendTrailPoint(state.posXFt, state.posYFt, state.speedMph);
+            }
+          }
+        } catch (err) {
+          state.lastRxAgeMs = 99999;
+          state.loraOnline = false;
+        }
+        await new Promise(r => setTimeout(r, 35));
+      }
+    }
+    pollWifiStateLoop();
+
+    // =========================================================================
+    // 4. DEAD-RECKONING TRAIL & TRACK MAP RENDERER (Tab 1)
+    // =========================================================================
+    const trackCanvas = document.getElementById('trackCanvas');
+    const trackCtx = trackCanvas.getContext('2d');
+
+    function appendTrailPoint(xFt, yFt, speedMph) {
+      const last = trailPoints[trailPoints.length - 1];
+      if (!last || Math.hypot(xFt - last.x, yFt - last.y) >= 0.6) {
+        trailPoints.push({ x: xFt, y: yFt, speed: speedMph });
+        if (trailPoints.length > 900) trailPoints.shift();
+      }
+    }
+
+    function clearDeadReckoningTrail() {
+      trailPoints.length = 0;
+      trailPoints.push({ x: state.posXFt, y: state.posYFt, speed: state.speedMph });
+      drawTrackMap();
+    }
+
+    function toggleDropPinMode() {
+      dropPinMode = !dropPinMode;
+      document.getElementById('dropPinBtn').textContent = dropPinMode ? 'Tap Map...' : '📍 Drop Pin';
+    }
+
+    function snapPinToTrike() {
+      startPinOffset = { x: 0, y: 0 };
+      sendHardwareCommand('l');
+      clearDeadReckoningTrail();
+      document.getElementById('lastEventOverlay').textContent = 'Start Pin (0,0) Set @ Trike';
+      drawTrackMap();
+    }
+
+    function drawTrackMap() {
+      const w = trackCanvas.width;
+      const h = trackCanvas.height;
+      trackCtx.fillStyle = '#0e1914';
+      trackCtx.fillRect(0, 0, w, h);
+
+      const showRef = document.getElementById('showRefTrackToggle').checked;
+      const showTrail = document.getElementById('showTrailToggle').checked;
+      const autoZoom = document.getElementById('autoZoomToggle').checked;
+
+      let minX = -45, maxX = 45, minY = -35, maxY = 35;
+      if (autoZoom) {
+        trailPoints.forEach(p => {
+          if (p.x < minX) minX = p.x;
+          if (p.x > maxX) maxX = p.x;
+          if (p.y < minY) minY = p.y;
+          if (p.y > maxY) maxY = p.y;
+        });
+        if (showRef) {
+          refCourseWaypointsFt.forEach(p => {
+            if (p.x < minX) minX = p.x;
+            if (p.x > maxX) maxX = p.x;
+            if (p.y < minY) minY = p.y;
+            if (p.y > maxY) maxY = p.y;
+          });
+        }
+      } else {
+        minX = state.posXFt - 80; maxX = state.posXFt + 80;
+        minY = state.posYFt - 50; maxY = state.posYFt + 50;
+      }
+
+      const spanX = Math.max(40, (maxX - minX) * 1.25);
+      const spanY = Math.max(30, (maxY - minY) * 1.25);
+      const scale = Math.min(w / spanX, h / spanY);
+      const centerXFt = 0.5 * (minX + maxX);
+      const centerYFt = 0.5 * (minY + maxY);
+
+      function toScreen(xFt, yFt) {
+        return {
+          sx: (w * 0.5) + (xFt - centerXFt) * scale,
+          sy: (h * 0.5) - (yFt - centerYFt) * scale
+        };
+      }
+
+      // 1. Coordinate Grid Lines
+      const gridStepFt = (spanX > 240) ? 50 : ((spanX > 100) ? 25 : 10);
+      document.getElementById('mapScaleOverlay').textContent = `Grid: ${gridStepFt} ft`;
+
+      trackCtx.strokeStyle = 'rgba(255,255,255,0.05)';
+      trackCtx.lineWidth = 1;
+      const startGX = Math.floor((centerXFt - w / scale) / gridStepFt) * gridStepFt;
+      const endGX   = Math.ceil((centerXFt + w / scale) / gridStepFt) * gridStepFt;
+      for (let gx = startGX; gx <= endGX; gx += gridStepFt) {
+        const p = toScreen(gx, 0);
+        trackCtx.beginPath(); trackCtx.moveTo(p.sx, 0); trackCtx.lineTo(p.sx, h); trackCtx.stroke();
+      }
+      const startGY = Math.floor((centerYFt - h / scale) / gridStepFt) * gridStepFt;
+      const endGY   = Math.ceil((centerYFt + h / scale) / gridStepFt) * gridStepFt;
+      for (let gy = startGY; gy <= endGY; gy += gridStepFt) {
+        const p = toScreen(0, gy);
+        trackCtx.beginPath(); trackCtx.moveTo(0, p.sy); trackCtx.lineTo(w, p.sy); trackCtx.stroke();
+      }
+
+      // 2. Optional 0.25-Mile Reference Course Overlay
+      if (showRef && refCourseWaypointsFt.length > 2) {
+        trackCtx.save();
+        trackCtx.beginPath();
+        refCourseWaypointsFt.forEach((pt, idx) => {
+          const s = toScreen(pt.x + startPinOffset.x, pt.y + startPinOffset.y);
+          if (idx === 0) trackCtx.moveTo(s.sx, s.sy);
+          else trackCtx.lineTo(s.sx, s.sy);
+        });
+        trackCtx.closePath();
+        trackCtx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
+        trackCtx.lineWidth = 14;
+        trackCtx.lineJoin = 'round';
+        trackCtx.stroke();
+        trackCtx.strokeStyle = 'rgba(38, 52, 64, 0.75)';
+        trackCtx.lineWidth = 10;
+        trackCtx.stroke();
+        trackCtx.restore();
+      }
+
+      // 3. Speed-Colored Live Dead-Reckoning Trail (4-12 mph scale)
+      if (showTrail && trailPoints.length > 1) {
+        for (let i = 1; i < trailPoints.length; i++) {
+          const p0 = toScreen(trailPoints[i - 1].x, trailPoints[i - 1].y);
+          const p1 = toScreen(trailPoints[i].x, trailPoints[i].y);
+          const spd = trailPoints[i].speed;
+
+          trackCtx.beginPath();
+          trackCtx.moveTo(p0.sx, p0.sy);
+          trackCtx.lineTo(p1.sx, p1.sy);
+
+          if (spd >= 9.5) trackCtx.strokeStyle = '#10b981';      // Fast (9.5 - 12 mph)
+          else if (spd >= 6.5) trackCtx.strokeStyle = '#f59e0b'; // Mid (6.5 - 9.5 mph)
+          else trackCtx.strokeStyle = '#ef4444';                 // Slow (4.0 - 6.5 mph)
+
+          trackCtx.lineWidth = 3.2;
+          trackCtx.lineCap = 'round';
+          trackCtx.stroke();
+        }
+      }
+
+      // 4. Start/Finish Pin (0,0)
+      const pinScreen = toScreen(startPinOffset.x, startPinOffset.y);
+      trackCtx.save();
+      trackCtx.translate(pinScreen.sx, pinScreen.sy);
+      trackCtx.fillStyle = '#ffffff';
+      trackCtx.fillRect(-2, -10, 4, 18);
+      trackCtx.fillStyle = '#ef4444';
+      trackCtx.beginPath();
+      trackCtx.arc(0, -12, 4.5, 0, Math.PI * 2);
+      trackCtx.fill();
+      trackCtx.fillStyle = '#e2e8f0';
+      trackCtx.font = 'bold 10px monospace';
+      trackCtx.fillText('START (0,0)', 7, -8);
+      trackCtx.restore();
+
+      // 5. Live Trike Marker + Relative Heading Cone
+      const trikeScreen = toScreen(state.posXFt, state.posYFt);
+      const rad = state.heading * (Math.PI / 180.0);
+
+      trackCtx.save();
+      trackCtx.translate(trikeScreen.sx, trikeScreen.sy);
+      trackCtx.rotate(rad);
+
+      trackCtx.beginPath();
+      trackCtx.moveTo(0, 0);
+      trackCtx.lineTo(-9, -22);
+      trackCtx.lineTo(9, -22);
+      trackCtx.closePath();
+      trackCtx.fillStyle = 'rgba(56, 189, 248, 0.28)';
+      trackCtx.fill();
+
+      trackCtx.beginPath();
+      trackCtx.arc(0, 0, 5.5, 0, Math.PI * 2);
+      trackCtx.fillStyle = '#38bdf8';
+      trackCtx.fill();
+      trackCtx.lineWidth = 2;
+      trackCtx.strokeStyle = '#ffffff';
+      trackCtx.stroke();
+      trackCtx.restore();
+
+      trackCanvas._mapTransform = { w, h, centerXFt, centerYFt, scale };
+    }
+
+    trackCanvas.addEventListener('click', (e) => {
+      if (!dropPinMode || !trackCanvas._mapTransform) return;
+      const rect = trackCanvas.getBoundingClientRect();
+      const sx = (e.clientX - rect.left) * (trackCanvas.width / rect.width);
+      const sy = (e.clientY - rect.top) * (trackCanvas.height / rect.height);
+      const t = trackCanvas._mapTransform;
+
+      const worldX = t.centerXFt + (sx - t.w * 0.5) / t.scale;
+      const worldY = t.centerYFt - (sy - t.h * 0.5) / t.scale;
+      startPinOffset = { x: worldX, y: worldY };
+      dropPinMode = false;
+      document.getElementById('dropPinBtn').textContent = '📍 Drop Pin';
+      drawTrackMap();
+    });
+
+    // =========================================================================
+    // 5. RELATIVE ORIENTATION DIAL (0° = INITIAL FWD) & WAVEFORM (Tab 3)
+    // =========================================================================
+    const compassCanvas = document.getElementById('compassCanvas');
+    const compassCtx = compassCanvas.getContext('2d');
+    const waveCanvas = document.getElementById('waveCanvas');
+    const waveCtx = waveCanvas.getContext('2d');
+
+    function formatRelativeYaw(deg360) {
+      let signed = ((deg360 % 360) + 360) % 360;
+      if (signed > 180) signed -= 360; // -180° (Left) .. +180° (Right)
+      if (Math.abs(signed) < 5) return `${signed.toFixed(1)}° FWD`;
+      if (Math.abs(signed) > 170) return `${signed.toFixed(1)}° BACK`;
+      return signed > 0 ? `+${signed.toFixed(1)}° R` : `${signed.toFixed(1)}° L`;
+    }
+
+    function drawOrientationDial() {
+      const w = compassCanvas.width;
+      const h = compassCanvas.height;
+      const cx = w / 2;
+      const cy = h / 2;
+      const r = cx - 10;
+
+      compassCtx.clearRect(0, 0, w, h);
+      compassCtx.save();
+      compassCtx.translate(cx, cy);
+
+      for (let deg = 0; deg < 360; deg += 15) {
+        const rad = (deg - 90) * Math.PI / 180;
+        const isMajor = (deg % 90 === 0);
+        const inR = isMajor ? r - 9 : r - 4;
+        compassCtx.beginPath();
+        compassCtx.moveTo(Math.cos(rad) * inR, Math.sin(rad) * inR);
+        compassCtx.lineTo(Math.cos(rad) * r, Math.sin(rad) * r);
+        compassCtx.strokeStyle = isMajor ? '#f1f5f9' : '#334155';
+        compassCtx.lineWidth = isMajor ? 2 : 1;
+        compassCtx.stroke();
+      }
+
+      // Relative Orientation Labels (Off Initial / Zeroed Pose)
+      const relLabels = [
+        { t: '0°',   a: 0,   c: '#10b981' },
+        { t: '+90°', a: 90,  c: '#94a3b8' },
+        { t: '180°', a: 180, c: '#94a3b8' },
+        { t: '-90°', a: 270, c: '#94a3b8' }
+      ];
+      compassCtx.font = 'bold 9.5px sans-serif';
+      compassCtx.textAlign = 'center';
+      compassCtx.textBaseline = 'middle';
+      relLabels.forEach(c => {
+        const rad = (c.a - 90) * Math.PI / 180;
+        compassCtx.fillStyle = c.c;
+        compassCtx.fillText(c.t, Math.cos(rad) * (r - 18), Math.sin(rad) * (r - 18));
+      });
+
+      // Rotating Relative Heading Arrow
+      compassCtx.save();
+      compassCtx.rotate(state.heading * Math.PI / 180);
+      const tipY = -(r - 24);
+      const tailY = (r - 28);
+
+      compassCtx.beginPath();
+      compassCtx.moveTo(0, tailY);
+      compassCtx.lineTo(0, tipY + 8);
+      compassCtx.strokeStyle = '#38bdf8';
+      compassCtx.lineWidth = 3.5;
+      compassCtx.lineCap = 'round';
+      compassCtx.stroke();
+
+      compassCtx.beginPath();
+      compassCtx.moveTo(0, tipY);
+      compassCtx.lineTo(-7, tipY + 13);
+      compassCtx.lineTo(7, tipY + 13);
+      compassCtx.closePath();
+      compassCtx.fillStyle = '#10b981';
+      compassCtx.fill();
+      compassCtx.restore();
+
+      compassCtx.beginPath();
+      compassCtx.arc(0, 0, 4, 0, Math.PI * 2);
+      compassCtx.fillStyle = '#f1f5f9';
+      compassCtx.fill();
+      compassCtx.restore();
+    }
+
+    function drawWaveformStrip() {
+      const w = waveCanvas.width;
+      const h = waveCanvas.height;
+      waveCtx.clearRect(0, 0, w, h);
+
+      if (waveHistory.length < 2) return;
+
+      // Speed wave (0 - 12 mph) in Sky Blue
+      waveCtx.beginPath();
+      waveHistory.forEach((pt, idx) => {
+        const x = (idx / (waveHistory.length - 1)) * w;
+        const y = h - 6 - (Math.min(12, Math.max(0, pt.speed)) / 12.0) * (h - 12);
+        if (idx === 0) waveCtx.moveTo(x, y);
+        else waveCtx.lineTo(x, y);
+      });
+      waveCtx.strokeStyle = '#38bdf8';
+      waveCtx.lineWidth = 2;
+      waveCtx.stroke();
+
+      // Current wave (0 - 14 A) in Emerald
+      waveCtx.beginPath();
+      waveHistory.forEach((pt, idx) => {
+        const x = (idx / (waveHistory.length - 1)) * w;
+        const y = h - 6 - (Math.min(14, Math.max(0, pt.current)) / 14.0) * (h - 12);
+        if (idx === 0) waveCtx.moveTo(x, y);
+        else waveCtx.lineTo(x, y);
+      });
+      waveCtx.strokeStyle = '#10b981';
+      waveCtx.lineWidth = 1.8;
+      waveCtx.stroke();
+    }
+
+    // =========================================================================
+    // 6. RACE ACTIONS (START/PAUSE, LAP, PIT STOP, DELIVERY & CSV EXPORT)
+    // =========================================================================
+    function formatHMS(sec) {
+      const hrs = Math.floor(sec / 3600);
+      const mins = Math.floor((sec % 3600) / 60);
+      const s = Math.floor(sec % 60);
+      return `${String(hrs).padStart(2, '0')}:${String(mins).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function formatSplit(sec) {
+      const mins = Math.floor(sec / 60);
+      const rem = (sec % 60).toFixed(1);
+      return `${String(mins).padStart(2, '0')}:${rem.padStart(4, '0')}`;
+    }
+
+    function recordLap() {
+      const splitSec = currentLapSec;
+      const splitStr = formatSplit(splitSec);
+      if (splitSec > 1.0 && (bestLapSec === null || splitSec < bestLapSec)) {
+        bestLapSec = splitSec;
+        document.getElementById('statBestLap').textContent = splitStr;
+      }
+
+      raceEvents.unshift({
+        type: `LAP ${currentLap}`,
+        color: 'var(--emerald)',
+        driver: activeDriver,
+        detail: `${splitStr} (${state.speedMph.toFixed(1)} mph)`,
+        time: formatHMS(raceSeconds)
+      });
+
+      document.getElementById('lastEventOverlay').textContent = `Last: LAP ${currentLap} (${splitStr})`;
+      currentLap++;
+      currentLapSec = 0.0;
+
+      sendHardwareCommand('l');
+      state.posXFt = startPinOffset.x;
+      state.posYFt = startPinOffset.y;
+      state.lapDistFt = 0.0;
+      state.uncertaintyFt = 1.5;
+      clearDeadReckoningTrail();
+
+      document.getElementById('headerLapNum').textContent = currentLap;
+      renderEventTable();
+      drawTrackMap();
+
+      const toast = document.getElementById('loopClosureToast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    function recordPitStop() {
+      const prev = activeDriver;
+      activeDriver = queuedDriver;
+      pitStopCount++;
+      document.getElementById('headerActiveDriver').textContent = activeDriver;
+      document.getElementById('lastEventOverlay').textContent = `PIT: ${prev} → ${activeDriver}`;
+
+      raceEvents.unshift({
+        type: 'PIT STOP',
+        color: 'var(--amber)',
+        driver: `${prev} → ${activeDriver}`,
+        detail: `Driver Swap (Lap ${currentLap})`,
+        time: formatHMS(raceSeconds)
+      });
+      renderEventTable();
+    }
+
+    function recordDelivery() {
+      deliveryCount++;
+      document.getElementById('lastEventOverlay').textContent = `DELIVERY #${deliveryCount} @ ${formatHMS(raceSeconds)}`;
+      raceEvents.unshift({
+        type: 'DELIVERY',
+        color: 'var(--sky)',
+        driver: activeDriver,
+        detail: `Stop #${deliveryCount} (Lap ${currentLap})`,
+        time: formatHMS(raceSeconds)
+      });
+      renderEventTable();
+    }
+
+    function selectQuickDriver(name) {
+      document.getElementById('nextDriverInput').value = name;
+      queueNextDriver();
+    }
+
+    function queueNextDriver() {
+      const v = document.getElementById('nextDriverInput').value.trim();
+      if (v) {
+        queuedDriver = v;
+        document.getElementById('headerNextDriver').textContent = queuedDriver;
+      }
+    }
+
+    function updateStartPauseButtonUI() {
+      const btn = document.getElementById('timerToggleBtn');
+      if (timerRunning) {
+        btn.textContent = '⏸ PAUSE';
+        btn.className = 'badge-mono badge-warn';
+      } else {
+        btn.textContent = '▶ START';
+        btn.className = 'badge-mono badge-ok';
+      }
+    }
+
+    function toggleRaceTimer() {
+      timerRunning = !timerRunning;
+      updateStartPauseButtonUI();
+      sendHardwareCommand(timerRunning ? 'p' : 'q');
+      document.getElementById('lastEventOverlay').textContent = timerRunning
+        ? 'Race Running'
+        : 'Paused (Speed 0.0 mph)';
+    }
+
+    function resetRaceTimer() {
+      timerRunning = false;
+      updateStartPauseButtonUI();
+      sendHardwareCommand('t');
+
+      raceSeconds = 0.0;
+      currentLapSec = 0.0;
+      currentLap = 1;
+      bestLapSec = null;
+      state.speedMph = 0.0;
+      state.speedFts = 0.0;
+      state.wheelRpm = 0.0;
+      state.totalDistFt = 0.0;
+      state.lapDistFt = 0.0;
+      state.posXFt = 0.0;
+      state.posYFt = 0.0;
+      state.uncertaintyFt = 1.5;
+      state.voltageV = 54.60;
+      state.currentA = 0.0;
+      state.powerW = 0.0;
+      state.energyWh = 0.0;
+      state.socPct = 100.0;
+      localRamSampleCount = 0;
+      clearDeadReckoningTrail();
+
+      document.getElementById('raceTimerDisplay').textContent = '00:00:00';
+      document.getElementById('headerLapNum').textContent = '1';
+      document.getElementById('headerLapSplit').textContent = '00:00.0';
+      document.getElementById('statBestLap').textContent = '--:--.-';
+      document.getElementById('lastEventOverlay').textContent = 'Press ▶ START to begin';
+      renderEventTable();
+    }
+
+    function clearRaceEvents() {
+      raceEvents.length = 0;
+      pitStopCount = 0;
+      deliveryCount = 0;
+      renderEventTable();
+    }
+
+    function renderEventTable() {
+      const tbody = document.getElementById('eventLogTableBody');
+      if (raceEvents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:var(--muted); padding:14px;">No race events recorded yet. Tap LAP, PIT STOP, or DELIVERY.</td></tr>';
+      } else {
+        tbody.innerHTML = raceEvents.map(ev => `
+          <tr>
+            <td style="font-weight:800; color:${ev.color};">${ev.type}</td>
+            <td>${ev.driver}</td>
+            <td style="color:var(--muted);">${ev.detail}</td>
+            <td style="text-align:right; color:var(--muted);">${ev.time}</td>
+          </tr>
+        `).join('');
+      }
+      document.getElementById('statTotalLaps').textContent = `${currentLap - 1} Laps`;
+      document.getElementById('statMarkersCount').textContent = `${pitStopCount} / ${deliveryCount}`;
+    }
+
+    // CSV Downloaders (Chunked Blob Streaming for up to 540,000 60Hz Samples)
+    let dumpInProgress = false;
+    function startLoraFlashOffload() {
+      if (dumpInProgress) return;
+      dumpInProgress = true;
+      const bar = document.getElementById('dumpProgressBar');
+      const pctLbl = document.getElementById('dumpPercentLabel');
+      const statusLbl = document.getElementById('dumpStatusLabel');
+      let pct = 0;
+      const timer = setInterval(() => {
+        pct += 20;
+        if (pct >= 100) {
+          pct = 100;
+          clearInterval(timer);
+          statusLbl.textContent = `✓ Verified: ${localRamSampleCount.toLocaleString()} local + ${state.txFlashRecords.toLocaleString()} ESP32 60Hz samples (${state.hwFreePsramKb} KB PSRAM free)`;
+          pctLbl.textContent = '100%';
+          bar.style.width = '100%';
+          dumpInProgress = false;
+        } else {
+          statusLbl.textContent = `Verifying 60Hz PSRAM & Local TypedArray Buffers (${pct}%)...`;
+          pctLbl.textContent = `${pct}%`;
+          bar.style.width = `${pct}%`;
+        }
+      }, 80);
+    }
+
+    function downloadTelemetryCsv() {
+      const header = 'sample_idx,race_time_s,driver,lap,speed_mph,wheel_rpm,total_dist_ft,lap_dist_ft,rel_yaw_deg,roll_deg,pitch_deg,lat_g,pos_x_ft,pos_y_ft,voltage_v,current_a,power_w,energy_wh,soc_pct\n';
+      const blobParts = [header];
+
+      if (localRamSampleCount === 0) {
+        blobParts.push(
+          `1,${raceSeconds.toFixed(3)},${activeDriver},${currentLap},${state.speedMph.toFixed(2)},${state.wheelRpm.toFixed(1)},${state.totalDistFt.toFixed(1)},${state.lapDistFt.toFixed(1)},${state.heading.toFixed(1)},${state.roll.toFixed(1)},${state.pitch.toFixed(1)},${state.lateralG.toFixed(2)},${state.posXFt.toFixed(1)},${state.posYFt.toFixed(1)},${state.voltageV.toFixed(2)},${state.currentA.toFixed(2)},${state.powerW.toFixed(1)},${state.energyWh.toFixed(2)},${state.socPct.toFixed(1)}\n`
+        );
+      } else {
+        // Build CSV in 8,000-row chunks so 540,000 rows never exceed JS string limits
+        const CHUNK_ROWS = 8000;
+        for (let start = 0; start < localRamSampleCount; start += CHUNK_ROWS) {
+          const end = Math.min(localRamSampleCount, start + CHUNK_ROWS);
+          const lines = new Array(end - start);
+          for (let i = start; i < end; i++) {
+            const b = i * LOG_FLOATS_STRIDE;
+            const drv = DRIVER_TABLE[localRamDriverIdx60Hz[i]] || activeDriver;
+            const lap = localRamLap60Hz[i];
+            lines[i - start] =
+              `${i + 1},${localRamFloats60Hz[b + 0].toFixed(3)},${drv},${lap},` +
+              `${localRamFloats60Hz[b + 1].toFixed(2)},${localRamFloats60Hz[b + 2].toFixed(1)},` +
+              `${localRamFloats60Hz[b + 3].toFixed(1)},${localRamFloats60Hz[b + 4].toFixed(1)},` +
+              `${localRamFloats60Hz[b + 5].toFixed(1)},${localRamFloats60Hz[b + 6].toFixed(1)},` +
+              `${localRamFloats60Hz[b + 7].toFixed(1)},${localRamFloats60Hz[b + 8].toFixed(2)},` +
+              `${localRamFloats60Hz[b + 9].toFixed(1)},${localRamFloats60Hz[b + 10].toFixed(1)},` +
+              `${localRamFloats60Hz[b + 11].toFixed(2)},${localRamFloats60Hz[b + 12].toFixed(2)},` +
+              `${localRamFloats60Hz[b + 13].toFixed(1)},${localRamFloats60Hz[b + 14].toFixed(2)},` +
+              `${localRamFloats60Hz[b + 15].toFixed(1)}`;
+          }
+          blobParts.push(lines.join('\n') + '\n');
+        }
+      }
+
+      const blob = new Blob(blobParts, { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'asme_trike_telemetry_60hz.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadRaceEventsCsv() {
+      const header = 'event_type,driver,detail,race_time';
+      const rows = raceEvents.map(e => `"${e.type}","${e.driver}","${e.detail}","${e.time}"`);
+      const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'asme_race_events.csv';
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // =========================================================================
+    // 7. HIGH-PRECISION 60 HZ LOCAL RAM LOGGER + 20 HZ UI REFRESH
+    // =========================================================================
+    const LOG_PERIOD_MS_60HZ = 1000.0 / 60.0; // 16.6667 ms
+    let lastPerfTickMs = performance.now();
+    let logAccumulatorMs = 0.0;
+
+    // Dedicated 60 Hz (16.67 ms) timer & RAM logging loop
+    setInterval(() => {
+      const nowPerf = performance.now();
+      let dtMs = nowPerf - lastPerfTickMs;
+      lastPerfTickMs = nowPerf;
+      if (dtMs < 0 || dtMs > 250) dtMs = 16.6667;
+
+      if (timerRunning) {
+        const dtSec = dtMs * 0.001;
+        raceSeconds += dtSec;
+        currentLapSec += dtSec;
+
+        logAccumulatorMs += dtMs;
+        while (logAccumulatorMs >= LOG_PERIOD_MS_60HZ) {
+          logAccumulatorMs -= LOG_PERIOD_MS_60HZ;
+          appendLocalRamSample60Hz();
+        }
+      } else {
+        logAccumulatorMs = 0.0;
+      }
+    }, 16);
+
+    setInterval(() => {
+      if (timerRunning) {
+        waveHistory.push({ speed: state.speedMph, current: state.currentA, soc: state.socPct });
+        if (waveHistory.length > 150) waveHistory.shift();
+      }
+
+      // Top Status Bar & Timer
+      document.getElementById('raceTimerDisplay').textContent = formatHMS(raceSeconds);
+      document.getElementById('headerLapSplit').textContent = formatSplit(currentLapSec);
+
+      const totalExp = state.totalRx + state.lostPackets;
+      const lossPct = totalExp > 0 ? ((state.lostPackets / totalExp) * 100) : 0.0;
+      const lossBadge = document.getElementById('topLossBadge');
+      lossBadge.textContent = `${lossPct.toFixed(1)}% Loss`;
+      lossBadge.className = 'badge-mono ' + (lossPct < 2.0 ? 'badge-ok' : 'badge-err');
+
+      const topDot = document.getElementById('topLinkDot');
+      const topLabel = document.getElementById('topLinkLabel');
+      const topRssi = document.getElementById('topRssiLabel');
+      if (state.loraOnline) {
+        topDot.className = 'status-dot ok';
+        topLabel.textContent = `LoRa ${state.loraRxHz}Hz`;
+        topRssi.textContent = `${state.loraRssi.toFixed(0)}dBm`;
+      } else {
+        topDot.className = 'status-dot err';
+        topLabel.textContent = 'NO LORA LINK';
+        topRssi.textContent = '--dBm';
+      }
+
+      // Tab 1: Speed (4-12 mph) & Main Screen Battery SoC
+      document.getElementById('speedMphDisplay').textContent = state.speedMph.toFixed(1);
+      document.getElementById('speedFtsDisplay').textContent = state.speedFts.toFixed(1);
+      document.getElementById('wheelRpmDisplay').textContent = Math.round(state.wheelRpm);
+      document.getElementById('totalDistDisplay').textContent = `${(state.totalDistFt / 5280.0).toFixed(2)}mi`;
+      document.getElementById('lapDistDisplay').textContent = `${Math.round(state.lapDistFt)}ft`;
+      document.getElementById('speedBarFill').style.width = `${Math.min(100, (state.speedMph / 12.0) * 100)}%`;
+
+      const spdBadge = document.getElementById('speedModeBadge');
+      spdBadge.textContent = state.simSpeed ? '4–12 MPH SINUSOID' : 'HALL SENSOR LIVE';
+      spdBadge.className = 'badge-mono ' + (state.simSpeed ? 'badge-sky' : 'badge-ok');
+
+      const socColor = state.socPct > 30 ? 'var(--emerald)' : (state.socPct > 15 ? 'var(--amber)' : 'var(--red)');
+      const mainBattBar = document.getElementById('mainBattBar');
+      mainBattBar.style.width = `${Math.max(0, Math.min(100, state.socPct))}%`;
+      mainBattBar.style.background = socColor;
+      const mainBattSoc = document.getElementById('mainBattSoc');
+      mainBattSoc.textContent = `${Math.round(state.socPct)}%`;
+      mainBattSoc.style.color = socColor;
+      document.getElementById('mainBattVolt').textContent = `${state.voltageV.toFixed(1)}V`;
+
+      // Tab 3: Sensors, Relative Orientation & 48V Battery
+      document.getElementById('imuYawDisplay').textContent = formatRelativeYaw(state.heading);
+      document.getElementById('imuRollDisplay').textContent = `${state.roll >= 0 ? '+' : ''}${state.roll.toFixed(1)}°`;
+      document.getElementById('imuPitchDisplay').textContent = `${state.pitch >= 0 ? '+' : ''}${state.pitch.toFixed(1)}°`;
+      document.getElementById('imuGDisplay').textContent = `${Math.abs(state.lateralG).toFixed(2)} G`;
+
+      document.getElementById('battSocBadge').textContent = `${state.socPct.toFixed(1)}% SoC`;
+      document.getElementById('battSocBadge').className = 'badge-mono ' + (state.socPct > 30 ? 'badge-ok' : (state.socPct > 15 ? 'badge-warn' : 'badge-err'));
+      const socBar = document.getElementById('battSocBar');
+      socBar.style.width = `${Math.max(0, Math.min(100, state.socPct))}%`;
+      socBar.style.background = socColor;
+
+      document.getElementById('battVoltDisplay').textContent = `${state.voltageV.toFixed(2)} V`;
+      document.getElementById('battCurrDisplay').textContent = `${state.currentA.toFixed(2)} A`;
+      document.getElementById('battPowerDisplay').textContent = `${Math.round(state.powerW)} W`;
+      document.getElementById('battEnergyDisplay').textContent = `${state.energyWh.toFixed(1)} Wh`;
+
+      // Tab 4: Diagnostics & Flash Counter
+      document.getElementById('connSourceBadge').textContent = state.loraOnline ? 'Wi-Fi (192.168.4.1)' : 'Waiting for TX';
+      document.getElementById('pipePhone').className = 'pipe-node ' + (state.phoneConnected ? 'ok' : (state.loraOnline ? 'err' : 'warn'));
+      document.getElementById('pipePhoneSub').textContent = state.phoneConnected ? `${state.phoneRssi}dBm` : 'No Phone';
+
+      document.getElementById('pipeZig').className = 'pipe-node ' + (state.zigStreaming ? 'ok' : (state.phoneConnected ? 'warn' : 'err'));
+      document.getElementById('pipeZigSub').textContent = state.zigStreaming ? `${state.zigHz} Hz` : 'Stopped';
+
+      document.getElementById('pipeLora').className = 'pipe-node ' + (state.loraOnline ? 'ok' : 'err');
+      document.getElementById('pipeLoraSub').textContent = state.loraOnline ? `${state.loraRssi.toFixed(0)}dBm` : 'Offline';
+
+      document.getElementById('diagPhoneWifi').textContent = state.phoneConnected ? `CONNECTED (${state.phoneRssi} dBm)` : 'DISCONNECTED';
+      document.getElementById('diagZigRate').textContent = state.zigStreaming ? `ACTIVE (${state.zigHz} Hz)` : 'WAITING FOR ZIG SIM';
+      document.getElementById('diagLoraSignal').textContent = state.loraOnline ? `${state.loraRssi.toFixed(1)} dBm / ${state.loraSnr.toFixed(1)} dB` : '-- dBm / -- dB';
+      document.getElementById('diagLoraRate').textContent = state.loraOnline ? `${state.loraRxHz} Hz (${state.lastRxAgeMs} ms ago)` : 'Offline';
+
+      document.getElementById('diagTxCount').textContent = totalExp.toLocaleString();
+      document.getElementById('diagRxCount').textContent = state.totalRx.toLocaleString();
+      document.getElementById('diagLostCount').textContent = `${state.lostPackets} (${lossPct.toFixed(2)}%)`;
+
+      const displayedSamples = Math.max(localRamSampleCount, state.txFlashRecords);
+      document.getElementById('txFlashBadge').textContent = `${displayedSamples.toLocaleString()} / 540,000`;
+      document.getElementById('browserLogCount').textContent = `${localRamSampleCount.toLocaleString()} samples @ 60Hz`;
+      if (!dumpInProgress) {
+        const fillPct = Math.min(100, (displayedSamples / MAX_LOG_SAMPLES_60HZ) * 100);
+        document.getElementById('dumpProgressBar').style.width = `${fillPct.toFixed(1)}%`;
+        document.getElementById('dumpPercentLabel').textContent = `${fillPct.toFixed(1)}%`;
+      }
+
+      if (activeTab === 'race') drawTrackMap();
+      if (activeTab === 'sensors') {
+        drawOrientationDial();
+        drawWaveformStrip();
+      }
+    }, 50);
+
+    renderEventTable();
+    drawTrackMap();
+    drawOrientationDial();
+  </script>
+</body>
+</html>
