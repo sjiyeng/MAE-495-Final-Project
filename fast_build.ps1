@@ -1,8 +1,8 @@
-# =============================================================================
+﻿# =============================================================================
 # ASME e-HPVC Fast Incremental Builder, HTML->PROGMEM Syncer & Auto-Port Uploader
 # =============================================================================
 param(
-  [ValidateSet("rx", "tx", "both")]
+  [ValidateSet("rx", "tx", "wheel", "both")]
   [string]$Target = "both",
 
   [switch]$Upload,
@@ -176,12 +176,36 @@ function Build-Target([string]$Name, [string]$SketchDir) {
     $TargetPort = $Port
     if (-not $TargetPort) {
       $Ports = Get-CimInstance Win32_PnPEntity -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -match '\((COM\d+)\)' -and ($_.DeviceID -match 'VID_303A' -or $_.Name -match 'USB JTAG|Serial') }
+        Where-Object { $_.Name -match '\((COM\d+)\)' -and ($_.DeviceID -match 'VID_303A|VID_2886' -or $_.Name -match 'USB JTAG|Serial') }
       foreach ($p in $Ports) {
         if ($p.Name -match '\((COM\d+)\)') {
           $TargetPort = $Matches[1]
           break
         }
+      }
+
+      if (-not $TargetPort) {
+        try {
+          $BoardList = & $ArduinoCli board list --format json 2>$null | ConvertFrom-Json
+          foreach ($entry in $BoardList.detected_ports) {
+            if ($entry.port.address -match '^COM\d+$') {
+              $isEsp = ($entry.matching_boards | Where-Object { $_.fqbn -match 'esp32|XIAO_ESP32S3' })
+              if ($isEsp -or $entry.port.protocol -eq 'serial') {
+                $TargetPort = $entry.port.address
+                break
+              }
+            }
+          }
+        } catch {}
+      }
+
+      if (-not $TargetPort) {
+        try {
+          $SerialPorts = [System.IO.Ports.SerialPort]::GetPortNames() | Sort-Object
+          if ($SerialPorts.Count -gt 0) {
+            $TargetPort = $SerialPorts[0]
+          }
+        } catch {}
       }
 
       if ($TargetPort) {
@@ -204,7 +228,9 @@ function Build-Target([string]$Name, [string]$SketchDir) {
   }
 }
 
-Sync-DashboardHtmlHeader
+if ($Target -ne "wheel") {
+  Sync-DashboardHtmlHeader
+}
 
 switch ($Target) {
   "tx" {
@@ -212,6 +238,9 @@ switch ($Target) {
   }
   "rx" {
     Build-Target "receiver" (Join-Path $RepoRoot "firmware\receiver")
+  }
+  "wheel" {
+    Build-Target "test_wheel_sensor" (Join-Path $RepoRoot "test\test_wheel_sensor")
   }
   "both" {
     Build-Target "transmitter" (Join-Path $RepoRoot "firmware\transmitter")

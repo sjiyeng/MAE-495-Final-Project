@@ -19,7 +19,9 @@ static WebServer server(80);
 inline void initDashboardServer() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(RX_AP_SSID);
-  WiFi.setSleep(false); // Low-latency SoftAP HTTP responses (~2 ms)
+  // Lower 2.4 GHz Wi-Fi TX power (8.5 dBm vs 19.5 dBm default) & enable modem sleep to cut ~360 mA current spikes
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.setSleep(true);
 
   // 1. Main Pitwall Web Dashboard (Offline-Ready Single Page App)
   server.on("/", []() {

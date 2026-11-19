@@ -17,7 +17,19 @@
 
 extern TrikeTelemetryState trikeState;
 
-static SX1262 radio = new Module(LORA_NSS_PIN, LORA_DIO1_PIN, LORA_NRST_PIN, LORA_BUSY_PIN);
+struct LowSpikeSX1262 : public SX1262 {
+  using SX1262::SX1262;
+  int16_t configureLowCurrentSpikes(int8_t powerDbm) {
+    // 1. Force high-efficiency internal DC-DC buck converter (~50% lower current than LDO)
+    int16_t state = setRegulatorDCDC();
+    // 2. Slow PA ramp-up time to 800 us (vs 40 us default) to eliminate steep di/dt rail dips
+    int8_t rawPwr = constrain((int)powerDbm, -9, 22);
+    state |= SX126x::setTxParams(rawPwr, RADIOLIB_SX126X_PA_RAMP_800U);
+    return state;
+  }
+};
+
+static LowSpikeSX1262 radio = new Module(LORA_NSS_PIN, LORA_DIO1_PIN, LORA_NRST_PIN, LORA_BUSY_PIN);
 static volatile bool dio1IrqFlag    = false;
 static bool radioTransmitting       = false;
 static unsigned long txStartTimeMs  = 0;
@@ -52,6 +64,7 @@ inline bool configureLoRaTransmitterRadio() {
     LORA_PREAMBLE_LEN
   );
   if (state == RADIOLIB_ERR_NONE) {
+    radio.configureLowCurrentSpikes(LORA_PWR_DBM);
     radio.setDio1Action(onLoRaDio1Irq);
     radio.standby();
     radioTransmitting   = false;

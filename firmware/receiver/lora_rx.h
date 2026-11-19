@@ -15,7 +15,21 @@
 
 extern ReceiverState rxState;
 
-static SX1262 radio = new Module(LORA_NSS_PIN, LORA_DIO1_PIN, LORA_NRST_PIN, LORA_BUSY_PIN);
+struct LowSpikeSX1262 : public SX1262 {
+  using SX1262::SX1262;
+  int16_t configureLowCurrentSpikes(int8_t powerDbm) {
+    // 1. Force high-efficiency internal DC-DC buck converter (~50% lower current than LDO)
+    int16_t state = setRegulatorDCDC();
+    // 2. Use power-saving (non-boosted) LNA gain mode in RX (~4.2 mA vs ~9.6 mA) & avoid close-range overload
+    state |= setRxBoostedGainMode(false);
+    // 3. Slow PA ramp-up time to 800 us (vs 40 us default) to eliminate steep di/dt rail dips
+    int8_t rawPwr = constrain((int)powerDbm, -9, 22);
+    state |= SX126x::setTxParams(rawPwr, RADIOLIB_SX126X_PA_RAMP_800U);
+    return state;
+  }
+};
+
+static LowSpikeSX1262 radio = new Module(LORA_NSS_PIN, LORA_DIO1_PIN, LORA_NRST_PIN, LORA_BUSY_PIN);
 static volatile bool receivedFlag    = false;
 static bool rxFlashReady             = false;
 static RamLogRecord60Hz* rxRamBuffer = nullptr;
@@ -42,6 +56,7 @@ inline bool configureLoRaReceiverRadio() {
     LORA_PREAMBLE_LEN
   );
   if (state == RADIOLIB_ERR_NONE) {
+    radio.configureLowCurrentSpikes(LORA_PWR_DBM);
     radio.setDio1Action(onLoRaPacketReceived);
     receivedFlag = false;
     radio.startReceive();
@@ -137,7 +152,7 @@ inline void triggerFullRaceReset() {
   rxState.powerW             = 0.0f;
   rxState.energyWh           = 0.0f;
   rxState.socPct             = 100.0f;
-  rxState.rxFlashRecords     = 0;
+  // Preserve rxState.rxFlashRecords across race stop so logged 60Hz samples never disappear
   rxState.resetSeq++;
   rxState.pendingResetBursts = 4; // Send reset command over 4 slots for guaranteed delivery
 }

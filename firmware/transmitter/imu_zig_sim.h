@@ -196,7 +196,9 @@ inline void parseZigSimPacket(const char* buf, int len) {
 inline void initImuZigSim() {
   WiFi.mode(WIFI_AP);
   WiFi.softAP(TX_AP_SSID);
-  WiFi.setSleep(false);
+  // Lower 2.4 GHz Wi-Fi TX power (8.5 dBm vs 19.5 dBm default) & enable modem sleep to cut ~360 mA current spikes
+  WiFi.setTxPower(WIFI_POWER_8_5dBm);
+  WiFi.setSleep(true);
   delay(100);
   zigUdp.begin(ZIG_UDP_PORT);
 }

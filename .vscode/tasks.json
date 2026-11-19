@@ -85,6 +85,39 @@
         "panel": "shared"
       },
       "problemMatcher": "$gcc"
+    },
+    {
+      "label": "⚡ Fast Compile: Wheel Speed Sensor Test (DIO Pin 1)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/fast_build.ps1",
+        "-Target", "wheel"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
+    },
+    {
+      "label": "🚀 Compile & Upload: Wheel Speed Sensor Test (Auto-Detect COM Port)",
+      "type": "shell",
+      "command": "powershell",
+      "args": [
+        "-ExecutionPolicy", "Bypass",
+        "-File", "${workspaceFolder}/fast_build.ps1",
+        "-Target", "wheel",
+        "-Upload"
+      ],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      },
+      "problemMatcher": "$gcc"
     }
   ]
 }
