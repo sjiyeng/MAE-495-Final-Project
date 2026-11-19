@@ -13,7 +13,7 @@
 //    Set to `false` when the physical Hall sensor or INA228 is wired up!
 //    (Can also be toggled at runtime via Serial commands 's' and 'b')
 // -----------------------------------------------------------------------------
-#define DEFAULT_SIM_WHEEL_SPEED   true    // true = 10s Sinusoidal 0-10 mph generator
+#define DEFAULT_SIM_WHEEL_SPEED   false   // false = Hardware Hall Sensor on D0 (GPIO 1); true = Sinusoidal sim
 #define DEFAULT_SIM_INA228_POWER  true    // true = 48V pack (54.6V->42.0V) 5-min drain + 10s load sag
 
 // -----------------------------------------------------------------------------
@@ -42,7 +42,7 @@
 #define LORA_BUSY_PIN             40      // Radio Busy Status
 
 // External Trike Sensors (Future-Proof Hardware Pins)
-#define HALL_SENSOR_PIN           1       // Header D0 (GPIO 1) - RISING interrupt in IRAM
+#define HALL_SENSOR_PIN           D0      // Top-left XIAO pin D0 (GPIO 1) - RISING interrupt in IRAM
 #define I2C_SDA_PIN               5       // Header D4 (GPIO 5) - I2C SDA for INA228
 #define I2C_SCL_PIN               6       // Header D5 (GPIO 6) - I2C SCL for INA228
 #define INA228_I2C_ADDR           0x40    // Default TI INA228 I2C Address

@@ -32,6 +32,11 @@ IRAM_ATTR
 #endif
 void onHallSensorPulse() {
   uint32_t nowUs = micros();
+  if (hallPulseCount == 0) {
+    lastHallPulseUs = nowUs;
+    hallPulseCount = 1;
+    return;
+  }
   uint32_t dtUs = nowUs - lastHallPulseUs;
   if (dtUs >= HALL_DEBOUNCE_US) {
     latestPulsePeriodUs = dtUs;
@@ -45,12 +50,16 @@ inline void initWheelSensor() {
   trikeState.wheelDiameterIn = DEFAULT_WHEEL_DIAMETER_IN;
   lastWheelUpdateMs          = millis();
 
-  // Always configure GPIO 1 so hardware mode can be toggled live without rebooting
+  // Configure top-left XIAO pin D0 (GPIO 1) for hardware Hall sensor pulses
   pinMode(HALL_SENSOR_PIN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(HALL_SENSOR_PIN), onHallSensorPulse, RISING);
 }
 
 inline void resetWheelSensorState() {
+  noInterrupts();
+  prevHallPulseCount  = hallPulseCount;
+  latestPulsePeriodUs = 0;
+  interrupts();
   trikeState.speedMph        = 0.0f;
   trikeState.speedFts        = 0.0f;
   trikeState.wheelRpm        = 0.0f;

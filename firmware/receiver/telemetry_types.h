@@ -134,7 +134,7 @@ struct ReceiverState {
   bool     phoneWifiConnected = false;
   bool     zigStreaming       = false;
   bool     hasQuatPose        = false;
-  bool     simSpeedActive     = true;
+  bool     simSpeedActive     = false;
   bool     simBatteryActive   = true;
   bool     txFlashOk          = false;
   bool     rxRamLogReady      = false;

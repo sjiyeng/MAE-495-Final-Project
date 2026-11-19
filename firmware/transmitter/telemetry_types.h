@@ -107,7 +107,7 @@ struct TrikeTelemetryState {
   // Mode & Run/Pause switches (Transmitter continuously broadcasts sensor/sim waves; Receiver gates Start/Pause)
   bool     raceRunning      = true;
   uint32_t activeSimTimeMs  = 0;
-  bool     simWheelSpeed    = true;
+  bool     simWheelSpeed    = false;
   bool     simBattery       = true;
   bool     flashReady       = false;
   bool     ramLogReady      = false;
